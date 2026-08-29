@@ -56,7 +56,7 @@ const h=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt
 const enc=s=>encodeURIComponent(String(s??''));
 const dec=s=>decodeURIComponent(String(s??''));
 async function post(body){
-  const r=await fetch(API,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  const r=await fetch(API,{method:'POST',headers:{'Content-Type':'text/plain;charset=UTF-8'},body:JSON.stringify(body)});
   let x={}; try{x=await r.json()}catch{}
   if(!r.ok||!x.ok)throw new Error(x.error||('Error '+r.status));
   return x;
