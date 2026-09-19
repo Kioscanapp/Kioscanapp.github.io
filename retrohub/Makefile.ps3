@@ -32,6 +32,12 @@ all: $(TARGET).pkg
 $(TARGET).elf: $(OFILES)
 	$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
 
+prepare-package: $(TARGET).self
+	mkdir -p $(PKGFILES)/USRDIR
+	cp $(TARGET).self $(PKGFILES)/USRDIR/retrohub.self
+
+$(TARGET).pkg: prepare-package
+
 clean:
 	rm -f $(OFILES) $(TARGET).elf $(TARGET).self $(TARGET).fake.self $(TARGET).pkg $(TARGET).gnpdrm.pkg
 	rm -rf build
