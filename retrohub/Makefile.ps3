@@ -4,10 +4,10 @@ endif
 
 include $(PSL1GHT)/ppu_rules
 
-TARGET      := retrohub_ps3
-TITLE       := RetroHub PS3
-APPID       := RHUB00001
-CONTENTID   := UP0001-RHUB00001_00-0000000000000001
+TARGET      := retrovicios_ps3
+TITLE       := Retrovicios
+APPID       := RVIC00001
+CONTENTID   := UP0001-RVIC00001_00-0000000000000001
 PKGFILES    := pkgfiles
 ICON0       := assets/ICON0.PNG
 
@@ -34,7 +34,7 @@ $(TARGET).elf: $(OFILES)
 
 prepare-package: $(TARGET).self
 	mkdir -p $(PKGFILES)/USRDIR
-	cp $(TARGET).self $(PKGFILES)/USRDIR/retrohub.self
+	cp $(TARGET).self $(PKGFILES)/USRDIR/retrovicios.self
 
 $(TARGET).pkg: prepare-package
 
