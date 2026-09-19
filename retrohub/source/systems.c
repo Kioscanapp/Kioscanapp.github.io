@@ -13,7 +13,7 @@ const RHSystem rh_systems[] = {
     {"genesis",  "Sega Mega Drive",       "roms/genesis",  "md|gen|smd|bin",         "cores/genesis_plus_gx_libretro_psl1ght.SELF"},
     {"segacd",   "Sega CD",               "roms/segacd",   "cue|chd|iso",             "cores/genesis_plus_gx_libretro_psl1ght.SELF"},
     {"gb",       "Game Boy / Color",      "roms/gb",       "gb|gbc",                  "cores/gambatte_libretro_psl1ght.SELF"},
-    {"gba",      "Game Boy Advance",      "roms/gba",      "gba",                     "cores/mgba_libretro_psl1ght.SELF"},
+    {"gba",      "Game Boy Advance",      "roms/gba",      "gba",                     "cores/vba_next_libretro_psl1ght.SELF"},
     {"atari2600","Atari 2600",            "roms/atari2600","a26|bin",                 "cores/stella2014_libretro_psl1ght.SELF"},
     {"atari7800","Atari 7800",            "roms/atari7800","a78|bin",                 "cores/prosystem_libretro_psl1ght.SELF"},
     {"lynx",     "Atari Lynx",            "roms/lynx",     "lnx",                     "cores/handy_libretro_psl1ght.SELF"},
@@ -23,7 +23,7 @@ const RHSystem rh_systems[] = {
     {"virtualboy","Virtual Boy",           "roms/virtualboy","vb|vboy|bin",            "cores/mednafen_vb_libretro_psl1ght.SELF"},
     {"vectrex",  "Vectrex",                "roms/vectrex",  "vec|bin",                 "cores/vecx_libretro_psl1ght.SELF"},
     {"msx",      "MSX / MSX2",            "roms/msx",      "rom|mx1|mx2|dsk|cas",     "cores/fmsx_libretro_psl1ght.SELF"},
-    {"arcade",   "Arcade",                "roms/arcade",   "zip|7z",                  "cores/fbneo_libretro_psl1ght.SELF"},
+    {"arcade",   "Arcade",                "roms/arcade",   "zip|7z",                  "cores/mame2003_libretro_psl1ght.SELF"},
 };
 
 const size_t rh_system_count = sizeof(rh_systems) / sizeof(rh_systems[0]);
