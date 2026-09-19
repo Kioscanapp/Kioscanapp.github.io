@@ -86,7 +86,24 @@ jobs:
           cp dist/psl1ght/*_libretro_psl1ght.a retroarch/dist-scripts/
           cd retroarch/dist-scripts
           chmod +x dist-cores.sh
+
+          # dist-cores.sh successfully generates every SELF first, then tries
+          # to build RetroArch's legacy PKG with pkg.py. Current PS3DEV no
+          # longer ships pkg.py, so accept that final legacy packaging error
+          # only if all 15 required SELF files were actually generated.
+          set +e
           ./dist-cores.sh psl1ght
+          DIST_RC=$?
+          set -e
+
+          SELF_DIR="../pkg/psl1ght/pkg/USRDIR/cores"
+          SELF_COUNT="$(find "$SELF_DIR" -maxdepth 1 -name '*.SELF' | wc -l)"
+          echo "Generated SELF cores: $SELF_COUNT"
+          if [ "$SELF_COUNT" -ne 15 ]; then
+            echo "Core linking failed before all required SELF files were generated (dist rc=$DIST_RC)."
+            exit 1
+          fi
+          echo "All 15 SELF cores generated; ignoring RetroArch legacy PKG step (dist rc=$DIST_RC)."
 
       - name: Assemble RetroHub package tree
         run: |
