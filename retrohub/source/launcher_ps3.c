@@ -10,7 +10,7 @@
 #include <sys/stat.h>
 #endif
 
-#define RH_INSTALL_ROOT "/dev_hdd0/game/RHUB00001/USRDIR"
+#define RH_INSTALL_ROOT "/dev_hdd0/game/RVIC00001/USRDIR"
 
 int rh_file_exists(const char *path)
 {
