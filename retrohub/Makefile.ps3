@@ -1,0 +1,37 @@
+ifeq ($(strip $(PSL1GHT)),)
+$(error "Set PSL1GHT first, e.g. export PSL1GHT=/usr/local/ps3dev")
+endif
+
+include $(PSL1GHT)/ppu_rules
+
+TARGET      := retrohub_ps3
+TITLE       := RetroHub PS3
+APPID       := RHUB00001
+CONTENTID   := UP0001-RHUB00001_00-0000000000000001
+PKGFILES    := pkgfiles
+ICON0       := assets/ICON0.PNG
+
+SOURCES     := source
+INCLUDES    := include
+LIBDIRS     := -L$(PORTLIBS)/lib
+LIBS        := -lSDL -lrt -laudio -lrsx -lgcm_sys -lnet -lio -lsysutil -lsysmodule -lnetctl -lsysfs -llv2 -lm
+CFLAGS      += -O2 -Wall -Wextra -std=gnu99 -D__PSL1GHT__ -D__PS3__ -mcpu=cell $(LIBPSL1GHT_INC) -I$(INCLUDES) -I$(PORTLIBS)/include
+LDFLAGS     += -mcpu=cell $(LIBDIRS)
+
+CFILES      := $(SOURCES)/main_ps3.c \
+               $(SOURCES)/catalog.c \
+               $(SOURCES)/systems.c \
+               $(SOURCES)/launcher_ps3.c \
+               $(SOURCES)/state.c \
+               $(SOURCES)/filter.c \
+               $(SOURCES)/font5x7.c
+OFILES      := $(CFILES:.c=.o)
+
+all: $(TARGET).pkg
+
+$(TARGET).elf: $(OFILES)
+	$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
+
+clean:
+	rm -f $(OFILES) $(TARGET).elf $(TARGET).self $(TARGET).fake.self $(TARGET).pkg $(TARGET).gnpdrm.pkg
+	rm -rf build
