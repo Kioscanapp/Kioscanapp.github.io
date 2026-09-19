@@ -11,13 +11,14 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 25
     env:
-      CORES: "nestopia snes9x2010 genesis_plus_gx gambatte vba_next stella2014 prosystem handy mednafen_pce_fast mednafen_ngp mednafen_wswan mednafen_vb vecx fmsx mame2003"
+      BASELINE_ARTIFACT_ID: "10593371072"
 
     steps:
       - name: Checkout
@@ -26,7 +27,8 @@ jobs:
       - name: Install host tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y git make cmake rsync python3 nvidia-cg-toolkit
+          sudo apt-get install -y make python3 python3-pip python3-tk unzip
+          python3 -m pip install --break-system-packages pycryptodomex customtkinter
 
       - name: Install PS3DEV SDK
         run: |
@@ -38,85 +40,46 @@ jobs:
           echo "$GITHUB_WORKSPACE/ps3dev/ppu/bin" >> "$GITHUB_PATH"
           echo "$GITHUB_WORKSPACE/ps3dev/spu/bin" >> "$GITHUB_PATH"
 
-      - name: Fetch Libretro sources
+      - name: Reuse verified RetroHub v1.0 cores
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          git clone --depth 1 https://github.com/libretro/libretro-super.git
-          cd libretro-super
-          ./libretro-fetch.sh --shallow --retroarch $CORES
+          curl -fL --retry 3             -H "Authorization: Bearer $GH_TOKEN"             -H "Accept: application/vnd.github+json"             "https://api.github.com/repos/${{ github.repository }}/actions/artifacts/$BASELINE_ARTIFACT_ID/zip"             -o /tmp/retrohub-baseline.zip
+          mkdir -p /tmp/baseline-artifact
+          unzip -q /tmp/retrohub-baseline.zip -d /tmp/baseline-artifact
+          BASE_PKG="$(find /tmp/baseline-artifact -maxdepth 2 -name '*.pkg' | head -n 1)"
+          test -n "$BASE_PKG"
 
-      - name: Build Libretro cores for PSL1GHT
-        run: |
-          cd libretro-super
-          JOBS=2 ./libretro-build-psl1ght.sh $CORES
-          test -d dist/psl1ght
-          ls -lh dist/psl1ght
+          curl -fL --retry 3             https://raw.githubusercontent.com/AphelionWasTaken/PyKG/main/PyKG.py             -o /tmp/PyKG.py
 
-      - name: Patch RetroArch core runtime for RetroHub
-        run: |
-          python3 - <<'PY'
+          PYTHONPATH=/tmp python3 - <<'PY'
           from pathlib import Path
-          p = Path("libretro-super/retroarch/frontend/drivers/platform_ps3.c")
-          s = p.read_text()
-          old_id = '#define EMULATOR_CONTENT_DIR "SSNE10001"'
-          if old_id not in s:
-              raise SystemExit("PSL1GHT app id marker not found")
-          s = s.replace(old_id, '#define EMULATOR_CONTENT_DIR "RHUB00001"', 1)
-
-          old_shutdown = """static void frontend_ps3_shutdown(bool unused)
-          {
-             sysProcessExit(0);
-          }"""
-          new_shutdown = """static void frontend_ps3_shutdown(bool unused)
-          {
-             const char *retrohub = "/dev_hdd0/game/RHUB00001/USRDIR/retrohub.self";
-             (void)unused;
-             sysProcessExitSpawn2(retrohub, NULL, NULL, NULL, 0, 1000,
-                   SYS_PROCESS_SPAWN_STACK_SIZE_1M);
-          }"""
-          if old_shutdown not in s:
-              raise SystemExit("PS3 shutdown function marker not found")
-          s = s.replace(old_shutdown, new_shutdown, 1)
-          p.write_text(s)
+          import os
+          import PyKG
+          pkg = next(Path("/tmp/baseline-artifact").rglob("*.pkg"))
+          out = Path("/tmp/baseline-extracted")
+          PyKG.extract_pkg(pkg, out)
+          core_dir = out / "RHUB00001" / "USRDIR" / "cores"
+          cores = sorted(core_dir.glob("*.SELF"))
+          if len(cores) != 15:
+              raise SystemExit(f"Expected 15 verified cores, found {len(cores)}")
+          print("Verified baseline cores:", len(cores))
           PY
 
-      - name: Link cores as PS3 SELF executables
-        run: |
-          cd libretro-super
-          mkdir -p retroarch/pkg/psl1ght/pkg/USRDIR/cores
-          cp dist/psl1ght/*_libretro_psl1ght.a retroarch/dist-scripts/
-          cd retroarch/dist-scripts
-          chmod +x dist-cores.sh
-
-          # dist-cores.sh successfully generates every SELF first, then tries
-          # to build RetroArch's legacy PKG with pkg.py. Current PS3DEV no
-          # longer ships pkg.py, so accept that final legacy packaging error
-          # only if all 15 required SELF files were actually generated.
-          set +e
-          ./dist-cores.sh psl1ght
-          DIST_RC=$?
-          set -e
-
-          SELF_DIR="../pkg/psl1ght/pkg/USRDIR/cores"
-          SELF_COUNT="$(find "$SELF_DIR" -maxdepth 1 -name '*.SELF' | wc -l)"
-          echo "Generated SELF cores: $SELF_COUNT"
-          if [ "$SELF_COUNT" -ne 15 ]; then
-            echo "Core linking failed before all required SELF files were generated (dist rc=$DIST_RC)."
-            exit 1
-          fi
-          echo "All 15 SELF cores generated; ignoring RetroArch legacy PKG step (dist rc=$DIST_RC)."
+          mkdir -p retrohub/pkgfiles/USRDIR/cores
+          cp /tmp/baseline-extracted/RHUB00001/USRDIR/cores/*.SELF retrohub/pkgfiles/USRDIR/cores/
 
       - name: Assemble RetroHub package tree
         run: |
-          mkdir -p retrohub/pkgfiles/USRDIR/cores
           mkdir -p retrohub/pkgfiles/USRDIR/data
           mkdir -p retrohub/pkgfiles/USRDIR/roms
           mkdir -p retrohub/pkgfiles/USRDIR/system
           mkdir -p retrohub/pkgfiles/USRDIR/savefiles
           mkdir -p retrohub/pkgfiles/USRDIR/savestates
+          mkdir -p retrohub/pkgfiles/USRDIR/screenshots
           mkdir -p retrohub/pkgfiles/USRDIR/config
           mkdir -p retrohub/assets
 
-          cp libretro-super/retroarch/pkg/psl1ght/pkg/USRDIR/cores/*.SELF              retrohub/pkgfiles/USRDIR/cores/
           cp "$PS3DEV/bin/ICON0.PNG" retrohub/assets/ICON0.PNG
 
           cat > retrohub/pkgfiles/USRDIR/retroarch.cfg <<'EOF'
@@ -128,30 +91,21 @@ jobs:
           screenshot_directory = "/dev_hdd0/game/RHUB00001/USRDIR/screenshots"
           EOF
 
-          echo "RetroHub PS3 v1.0" > retrohub/pkgfiles/USRDIR/data/README.TXT
+          echo "RetroHub PS3 v1.1 Neon UI" > retrohub/pkgfiles/USRDIR/data/README.TXT
           echo "Use legal backups in /RETROHUB/roms/<system>/ on USB, or the internal roms folder."             > retrohub/pkgfiles/USRDIR/roms/README.TXT
 
-          for core in $CORES; do
-            test -f "retrohub/pkgfiles/USRDIR/cores/${core}_libretro_psl1ght.SELF" || {
-              echo "Missing required core: $core"
-              exit 1
-            }
-          done
-
-          echo "Core count:"
-          find retrohub/pkgfiles/USRDIR/cores -maxdepth 1 -name '*.SELF' -printf '%f\n' | sort
           test "$(find retrohub/pkgfiles/USRDIR/cores -maxdepth 1 -name '*.SELF' | wc -l)" -eq 15
 
-      - name: Build RetroHub PKG
+      - name: Build RetroHub Neon PKG
         run: |
           cd retrohub
           make -f Makefile.ps3 clean all
-          cp retrohub_ps3.pkg "$GITHUB_WORKSPACE/RetroHub_PS3_v1.0.pkg"
-          ls -lh "$GITHUB_WORKSPACE/RetroHub_PS3_v1.0.pkg"
+          cp retrohub_ps3.pkg "$GITHUB_WORKSPACE/RetroHub_PS3_v1.1_Neon.pkg"
+          ls -lh "$GITHUB_WORKSPACE/RetroHub_PS3_v1.1_Neon.pkg"
 
       - name: Upload final package
         uses: actions/upload-artifact@v4
         with:
-          name: RetroHub_PS3_v1.0
-          path: RetroHub_PS3_v1.0.pkg
+          name: RetroHub_PS3_v1.1_Neon
+          path: RetroHub_PS3_v1.1_Neon.pkg
           if-no-files-found: error
