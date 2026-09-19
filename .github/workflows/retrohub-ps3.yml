@@ -1,0 +1,140 @@
+name: RetroHub PS3 Build
+
+on:
+  push:
+    branches:
+      - retrohub-ps3-build
+    paths:
+      - "retrohub/**"
+      - ".github/workflows/retrohub-ps3.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      CORES: "nestopia snes9x2010 genesis_plus_gx gambatte mgba stella2014 prosystem handy mednafen_pce_fast mednafen_ngp mednafen_wswan mednafen_vb vecx fmsx fbneo"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install host tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y git make cmake rsync python3
+
+      - name: Install PS3DEV SDK
+        run: |
+          curl -fL --retry 3             https://github.com/ps3dev/ps3dev/releases/download/nightly-2026-07-26/ps3dev-linux-X64.tar.gz             -o /tmp/ps3dev.tar.gz
+          tar -xzf /tmp/ps3dev.tar.gz -C "$GITHUB_WORKSPACE"
+          echo "PS3DEV=$GITHUB_WORKSPACE/ps3dev" >> "$GITHUB_ENV"
+          echo "PSL1GHT=$GITHUB_WORKSPACE/ps3dev" >> "$GITHUB_ENV"
+          echo "$GITHUB_WORKSPACE/ps3dev/bin" >> "$GITHUB_PATH"
+          echo "$GITHUB_WORKSPACE/ps3dev/ppu/bin" >> "$GITHUB_PATH"
+          echo "$GITHUB_WORKSPACE/ps3dev/spu/bin" >> "$GITHUB_PATH"
+
+      - name: Fetch Libretro sources
+        run: |
+          git clone --depth 1 https://github.com/libretro/libretro-super.git
+          cd libretro-super
+          ./libretro-fetch.sh --shallow --retroarch $CORES
+
+      - name: Build Libretro cores for PSL1GHT
+        run: |
+          cd libretro-super
+          JOBS=2 ./libretro-build-psl1ght.sh $CORES
+          test -d dist/psl1ght
+          ls -lh dist/psl1ght
+
+      - name: Patch RetroArch core runtime for RetroHub
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("libretro-super/retroarch/frontend/drivers/platform_ps3.c")
+          s = p.read_text()
+          old_id = '#define EMULATOR_CONTENT_DIR "SSNE10001"'
+          if old_id not in s:
+              raise SystemExit("PSL1GHT app id marker not found")
+          s = s.replace(old_id, '#define EMULATOR_CONTENT_DIR "RHUB00001"', 1)
+
+          old_shutdown = """static void frontend_ps3_shutdown(bool unused)
+          {
+             sysProcessExit(0);
+          }"""
+          new_shutdown = """static void frontend_ps3_shutdown(bool unused)
+          {
+             const char *retrohub = "/dev_hdd0/game/RHUB00001/USRDIR/retrohub.self";
+             (void)unused;
+             sysProcessExitSpawn2(retrohub, NULL, NULL, NULL, 0, 1000,
+                   SYS_PROCESS_SPAWN_STACK_SIZE_1M);
+          }"""
+          if old_shutdown not in s:
+              raise SystemExit("PS3 shutdown function marker not found")
+          s = s.replace(old_shutdown, new_shutdown, 1)
+          p.write_text(s)
+          PY
+
+      - name: Link cores as PS3 SELF executables
+        run: |
+          cd libretro-super
+          mkdir -p retroarch/pkg/psl1ght/pkg/USRDIR/cores
+          cp dist/psl1ght/*_libretro_psl1ght.a retroarch/dist-scripts/
+          cd retroarch/dist-scripts
+          chmod +x dist-cores.sh
+          ./dist-cores.sh psl1ght
+
+      - name: Assemble RetroHub package tree
+        run: |
+          mkdir -p retrohub/pkgfiles/USRDIR/cores
+          mkdir -p retrohub/pkgfiles/USRDIR/data
+          mkdir -p retrohub/pkgfiles/USRDIR/roms
+          mkdir -p retrohub/pkgfiles/USRDIR/system
+          mkdir -p retrohub/pkgfiles/USRDIR/savefiles
+          mkdir -p retrohub/pkgfiles/USRDIR/savestates
+          mkdir -p retrohub/pkgfiles/USRDIR/config
+          mkdir -p retrohub/assets
+
+          cp libretro-super/retroarch/pkg/psl1ght/pkg/USRDIR/cores/*.SELF              retrohub/pkgfiles/USRDIR/cores/
+          cp "$PS3DEV/bin/ICON0.PNG" retrohub/assets/ICON0.PNG
+
+          cat > retrohub/pkgfiles/USRDIR/retroarch.cfg <<'EOF'
+          menu_driver = "rgui"
+          config_save_on_exit = "true"
+          system_directory = "/dev_hdd0/game/RHUB00001/USRDIR/system"
+          savefile_directory = "/dev_hdd0/game/RHUB00001/USRDIR/savefiles"
+          savestate_directory = "/dev_hdd0/game/RHUB00001/USRDIR/savestates"
+          screenshot_directory = "/dev_hdd0/game/RHUB00001/USRDIR/screenshots"
+          EOF
+
+          echo "RetroHub PS3 v1.0" > retrohub/pkgfiles/USRDIR/data/README.TXT
+          echo "Use legal backups in /RETROHUB/roms/<system>/ on USB, or the internal roms folder."             > retrohub/pkgfiles/USRDIR/roms/README.TXT
+
+          for core in $CORES; do
+            test -f "retrohub/pkgfiles/USRDIR/cores/${core}_libretro_psl1ght.SELF" || {
+              echo "Missing required core: $core"
+              exit 1
+            }
+          done
+
+          echo "Core count:"
+          find retrohub/pkgfiles/USRDIR/cores -maxdepth 1 -name '*.SELF' -printf '%f\n' | sort
+          test "$(find retrohub/pkgfiles/USRDIR/cores -maxdepth 1 -name '*.SELF' | wc -l)" -eq 15
+
+      - name: Build RetroHub PKG
+        run: |
+          cd retrohub
+          make -f Makefile.ps3 clean all
+          cp retrohub_ps3.pkg "$GITHUB_WORKSPACE/RetroHub_PS3_v1.0.pkg"
+          ls -lh "$GITHUB_WORKSPACE/RetroHub_PS3_v1.0.pkg"
+
+      - name: Upload final package
+        uses: actions/upload-artifact@v4
+        with:
+          name: RetroHub_PS3_v1.0
+          path: RetroHub_PS3_v1.0.pkg
+          if-no-files-found: error
