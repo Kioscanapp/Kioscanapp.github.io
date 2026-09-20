@@ -108,18 +108,19 @@ jobs:
 
           cat > retrohub/pkgfiles/USRDIR/retroarch.cfg <<'EOF'
           menu_driver = "rgui"
-          config_save_on_exit = "true"
+          config_save_on_exit = "false"
           system_directory = "/dev_hdd0/game/RVIC00001/USRDIR/system"
           savefile_directory = "/dev_hdd0/game/RVIC00001/USRDIR/savefiles"
           savestate_directory = "/dev_hdd0/game/RVIC00001/USRDIR/savestates"
           screenshot_directory = "/dev_hdd0/game/RVIC00001/USRDIR/screenshots"
+          input_menu_toggle_gamepad_combo = "0"
           input_quit_gamepad_combo = "4"
           EOF
 
-          echo "Retrovicios PS3 v1.7 - interfaz moderna, caratulas, Sega CD y retorno rapido" > retrohub/pkgfiles/USRDIR/data/README.TXT
+          echo "Retrovicios PS3 v1.8 - interfaz moderna optimizada, caratula seleccionada, Sega CD y retorno directo" > retrohub/pkgfiles/USRDIR/data/README.TXT
           echo "Copia ROMs sueltas en /RETROVICIOS/roms/ o usa las carpetas por sistema." > retrohub/pkgfiles/USRDIR/roms/README.TXT
           echo "Caratulas JPG/PNG/BMP: /RETROVICIOS/covers/<sistema>/<mismo nombre de ROM>.jpg" >> retrohub/pkgfiles/USRDIR/roms/README.TXT
-          echo "SELECT + START durante el juego vuelve a Retrovicios." >> retrohub/pkgfiles/USRDIR/roms/README.TXT
+          echo "SELECT + START durante el juego cierra el core y vuelve directamente a Retrovicios." >> retrohub/pkgfiles/USRDIR/roms/README.TXT
           test "$(find retrohub/pkgfiles/USRDIR/cores -maxdepth 1 -name '*.SELF' | wc -l)" -ge 24
 
       - name: Build Retrovicios fixed PKG
@@ -128,12 +129,12 @@ jobs:
           "$PS3DEV/portlibs/ppu/bin/sdl2-config" --version
           cd retrohub
           make -f Makefile.ps3 clean all
-          cp retrovicios_ps3.pkg "$GITHUB_WORKSPACE/Retrovicios_PS3_v1.7_Moderno.pkg"
-          ls -lh "$GITHUB_WORKSPACE/Retrovicios_PS3_v1.7_Moderno.pkg"
+          cp retrovicios_ps3.pkg "$GITHUB_WORKSPACE/Retrovicios_PS3_v1.8_Rapido.pkg"
+          ls -lh "$GITHUB_WORKSPACE/Retrovicios_PS3_v1.8_Rapido.pkg"
 
       - name: Upload final package
         uses: actions/upload-artifact@v4
         with:
-          name: Retrovicios_PS3_v1.7_Moderno
-          path: Retrovicios_PS3_v1.7_Moderno.pkg
+          name: Retrovicios_PS3_v1.8_Rapido
+          path: Retrovicios_PS3_v1.8_Rapido.pkg
           if-no-files-found: error
