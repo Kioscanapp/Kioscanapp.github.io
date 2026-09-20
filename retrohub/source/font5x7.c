@@ -3,7 +3,7 @@
 #include <string.h>
 
 #ifdef __PSL1GHT__
-#include <SDL/SDL.h>
+#include <SDL.h>
 #endif
 
 /* Tiny built-in 5x7 font. Each glyph is 7 rows of 5 bits. */

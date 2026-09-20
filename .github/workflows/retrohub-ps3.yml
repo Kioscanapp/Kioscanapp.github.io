@@ -11,13 +11,14 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 25
     env:
-      CORES: "nestopia snes9x2010 genesis_plus_gx gambatte vba_next stella2014 prosystem handy mednafen_pce_fast mednafen_ngp mednafen_wswan mednafen_vb vecx fmsx mame2003"
+      BASELINE_ARTIFACT_ID: "10594671183"
 
     steps:
       - name: Checkout
@@ -26,7 +27,8 @@ jobs:
       - name: Install host tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y git make cmake rsync python3 python3-pil fonts-dejavu-core nvidia-cg-toolkit
+          sudo apt-get install -y make python3 python3-pip python3-tk unzip fonts-dejavu-core
+          python3 -m pip install --break-system-packages pycryptodomex customtkinter pillow
 
       - name: Install PS3DEV SDK
         run: |
@@ -40,72 +42,43 @@ jobs:
           echo "$GITHUB_WORKSPACE/ps3dev/ppu/bin" >> "$GITHUB_PATH"
           echo "$GITHUB_WORKSPACE/ps3dev/spu/bin" >> "$GITHUB_PATH"
 
-      - name: Fetch Libretro sources
+      - name: Reuse verified Retrovicios v1.0 cores
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          git clone --depth 1 https://github.com/libretro/libretro-super.git
-          cd libretro-super
-          ./libretro-fetch.sh --shallow --retroarch $CORES
+          curl -fL --retry 3 \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository }}/actions/artifacts/$BASELINE_ARTIFACT_ID/zip" \
+            -o /tmp/retrovicios-baseline.zip
+          mkdir -p /tmp/baseline-artifact
+          unzip -q /tmp/retrovicios-baseline.zip -d /tmp/baseline-artifact
+          BASE_PKG="$(find /tmp/baseline-artifact -maxdepth 2 -name '*.pkg' | head -n 1)"
+          test -n "$BASE_PKG"
 
-      - name: Build Libretro cores for PSL1GHT
-        run: |
-          cd libretro-super
-          JOBS=2 ./libretro-build-psl1ght.sh $CORES
-          test -d dist/psl1ght
-          ls -lh dist/psl1ght
+          curl -fL --retry 3 \
+            https://raw.githubusercontent.com/AphelionWasTaken/PyKG/main/PyKG.py \
+            -o /tmp/PyKG.py
 
-      - name: Patch RetroArch core runtime for Retrovicios
-        run: |
-          python3 - <<'PY'
+          PYTHONPATH=/tmp python3 - <<'PY'
           from pathlib import Path
-          p = Path("libretro-super/retroarch/frontend/drivers/platform_ps3.c")
-          s = p.read_text()
-          old_id = '#define EMULATOR_CONTENT_DIR "SSNE10001"'
-          if old_id not in s:
-              raise SystemExit("PSL1GHT app id marker not found")
-          s = s.replace(old_id, '#define EMULATOR_CONTENT_DIR "RVIC00001"', 1)
-
-          old_shutdown = """static void frontend_ps3_shutdown(bool unused)
-          {
-             sysProcessExit(0);
-          }"""
-          new_shutdown = """static void frontend_ps3_shutdown(bool unused)
-          {
-             const char *retrovicios = "/dev_hdd0/game/RVIC00001/USRDIR/retrovicios.self";
-             (void)unused;
-             sysProcessExitSpawn2(retrovicios, NULL, NULL, NULL, 0, 1000,
-                   SYS_PROCESS_SPAWN_STACK_SIZE_1M);
-          }"""
-          if old_shutdown not in s:
-              raise SystemExit("PS3 shutdown function marker not found")
-          s = s.replace(old_shutdown, new_shutdown, 1)
-          p.write_text(s)
+          import PyKG
+          pkg = next(Path("/tmp/baseline-artifact").rglob("*.pkg"))
+          out = Path("/tmp/baseline-extracted")
+          PyKG.extract_pkg(pkg, out)
+          core_dir = out / "RVIC00001" / "USRDIR" / "cores"
+          cores = sorted(core_dir.glob("*.SELF"))
+          if len(cores) != 15:
+              raise SystemExit(f"Expected 15 Retrovicios cores, found {len(cores)}")
+          print("Verified Retrovicios cores:", len(cores))
           PY
 
-      - name: Link cores as PS3 SELF executables
-        run: |
-          cd libretro-super
-          mkdir -p retroarch/pkg/psl1ght/pkg/USRDIR/cores
-          cp dist/psl1ght/*_libretro_psl1ght.a retroarch/dist-scripts/
-          cd retroarch/dist-scripts
-          chmod +x dist-cores.sh
-
-          set +e
-          ./dist-cores.sh psl1ght
-          DIST_RC=$?
-          set -e
-
-          SELF_DIR="../pkg/psl1ght/pkg/USRDIR/cores"
-          SELF_COUNT="$(find "$SELF_DIR" -maxdepth 1 -name '*.SELF' | wc -l)"
-          echo "Generated SELF cores: $SELF_COUNT"
-          if [ "$SELF_COUNT" -ne 15 ]; then
-            echo "Core linking failed before all required SELF files were generated (dist rc=$DIST_RC)."
-            exit 1
-          fi
-          echo "All 15 SELF cores generated; ignoring RetroArch legacy PKG step (dist rc=$DIST_RC)."
+          rm -rf retrohub/pkgfiles/USRDIR/cores
+          mkdir -p retrohub/pkgfiles/USRDIR/cores
+          cp /tmp/baseline-extracted/RVIC00001/USRDIR/cores/*.SELF retrohub/pkgfiles/USRDIR/cores/
 
       - name: Assemble Retrovicios package tree
         run: |
-          mkdir -p retrohub/pkgfiles/USRDIR/cores
           mkdir -p retrohub/pkgfiles/USRDIR/data
           mkdir -p retrohub/pkgfiles/USRDIR/roms
           mkdir -p retrohub/pkgfiles/USRDIR/system
@@ -115,35 +88,20 @@ jobs:
           mkdir -p retrohub/pkgfiles/USRDIR/config
           mkdir -p retrohub/assets
 
-          cp libretro-super/retroarch/pkg/psl1ght/pkg/USRDIR/cores/*.SELF retrohub/pkgfiles/USRDIR/cores/
-
           python3 - <<'PY'
           from PIL import Image, ImageDraw, ImageFont
-          from pathlib import Path
-
-          img = Image.new("RGB", (320, 176), (3, 7, 16))
-          d = ImageDraw.Draw(img)
-          cyan = (0, 226, 255)
-          pink = (255, 39, 193)
-          white = (235, 245, 255)
-
-          font_path = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
-          small_path = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
-          title = ImageFont.truetype(font_path, 37)
-          small = ImageFont.truetype(small_path, 13)
-
-          for y in range(104, 176, 9):
-              d.line((0, y, 320, y), fill=(12, 24, 42))
-          for x in range(0, 321, 24):
-              d.line((160, 104, x, 176), fill=(12, 24, 42))
-
-          d.rectangle((14, 16, 306, 96), outline=cyan, width=2)
-          d.rectangle((18, 20, 302, 92), outline=pink, width=1)
-          d.text((27, 31), "RETRO", font=title, fill=cyan)
-          d.text((143, 31), "VICIOS", font=title, fill=pink)
-          d.text((74, 111), "JUEGA  REVIVI  REPETI", font=small, fill=white)
-
-          Path("retrohub/assets").mkdir(parents=True, exist_ok=True)
+          img=Image.new("RGB",(320,176),(3,7,16))
+          d=ImageDraw.Draw(img)
+          cyan=(0,226,255); pink=(255,39,193); white=(235,245,255)
+          title=ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",37)
+          small=ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",13)
+          for y in range(104,176,9): d.line((0,y,320,y),fill=(12,24,42))
+          for x in range(0,321,24): d.line((160,104,x,176),fill=(12,24,42))
+          d.rectangle((14,16,306,96),outline=cyan,width=2)
+          d.rectangle((18,20,302,92),outline=pink,width=1)
+          d.text((27,31),"RETRO",font=title,fill=cyan)
+          d.text((143,31),"VICIOS",font=title,fill=pink)
+          d.text((74,111),"JUEGA  REVIVI  REPETI",font=small,fill=white)
           img.save("retrohub/assets/ICON0.PNG")
           PY
 
@@ -156,28 +114,22 @@ jobs:
           screenshot_directory = "/dev_hdd0/game/RVIC00001/USRDIR/screenshots"
           EOF
 
-          echo "Retrovicios PS3 v1.0" > retrohub/pkgfiles/USRDIR/data/README.TXT
-          echo "Usa tus copias legales en /RETROVICIOS/roms/<sistema>/ del USB, o en la carpeta interna roms." \
-            > retrohub/pkgfiles/USRDIR/roms/README.TXT
-
-          for core in $CORES; do
-            test -f "retrohub/pkgfiles/USRDIR/cores/${core}_libretro_psl1ght.SELF" || {
-              echo "Missing required core: $core"
-              exit 1
-            }
-          done
+          echo "Retrovicios PS3 v1.1 - SDL2 startup fix" > retrohub/pkgfiles/USRDIR/data/README.TXT
+          echo "Usa tus copias legales en /RETROVICIOS/roms/<sistema>/ del USB." > retrohub/pkgfiles/USRDIR/roms/README.TXT
           test "$(find retrohub/pkgfiles/USRDIR/cores -maxdepth 1 -name '*.SELF' | wc -l)" -eq 15
 
-      - name: Build Retrovicios PKG
+      - name: Build Retrovicios fixed PKG
         run: |
+          test -x "$PS3DEV/portlibs/ppu/bin/sdl2-config"
+          "$PS3DEV/portlibs/ppu/bin/sdl2-config" --version
           cd retrohub
           make -f Makefile.ps3 clean all
-          cp retrovicios_ps3.pkg "$GITHUB_WORKSPACE/Retrovicios_PS3_v1.0.pkg"
-          ls -lh "$GITHUB_WORKSPACE/Retrovicios_PS3_v1.0.pkg"
+          cp retrovicios_ps3.pkg "$GITHUB_WORKSPACE/Retrovicios_PS3_v1.1_Fix.pkg"
+          ls -lh "$GITHUB_WORKSPACE/Retrovicios_PS3_v1.1_Fix.pkg"
 
       - name: Upload final package
         uses: actions/upload-artifact@v4
         with:
-          name: Retrovicios_PS3_v1.0
-          path: Retrovicios_PS3_v1.0.pkg
+          name: Retrovicios_PS3_v1.1_Fix
+          path: Retrovicios_PS3_v1.1_Fix.pkg
           if-no-files-found: error

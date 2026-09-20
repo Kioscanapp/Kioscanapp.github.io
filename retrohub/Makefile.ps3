@@ -13,9 +13,10 @@ ICON0       := assets/ICON0.PNG
 
 SOURCES     := source
 INCLUDES    := include
+SDL2_CONFIG := $(PORTLIBS)/bin/sdl2-config
 LIBDIRS     := -L$(PORTLIBS)/lib
-LIBS        := -lSDL -lrt -laudio -lrsx -lgcm_sys -lnet -lio -lsysutil -lsysmodule -lnetctl -lsysfs -llv2 -lm
-CFLAGS      += -O2 -Wall -Wextra -std=gnu99 -D__PSL1GHT__ -D__PS3__ -mcpu=cell $(LIBPSL1GHT_INC) -I$(INCLUDES) -I$(PORTLIBS)/include
+LIBS        := $(shell $(SDL2_CONFIG) --libs) -lm
+CFLAGS      += -O2 -Wall -Wextra -std=gnu99 -D__PSL1GHT__ -D__PS3__ -mcpu=cell $(LIBPSL1GHT_INC) -I$(INCLUDES) $(shell $(SDL2_CONFIG) --cflags)
 LDFLAGS     += -mcpu=cell $(LIBDIRS)
 
 CFILES      := $(SOURCES)/main_ps3.c \
