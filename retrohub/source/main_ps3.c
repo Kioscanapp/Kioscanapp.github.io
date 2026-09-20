@@ -346,7 +346,7 @@ int main(int argc,char **argv)
     char status[96]="";
     (void)argc;(void)argv;
 
-    boot_log("Retrovicios v1.4 boot");
+    boot_log("Retrovicios v1.5 boot");
     SDL_SetMainReady();
     if(SDL_Init(SDL_INIT_VIDEO)<0){boot_log("SDL video init failed");return 1;}
     boot_log("SDL2 video init OK");

@@ -18,8 +18,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     env:
-      BASELINE_ARTIFACT_ID: "10594671183"
-      NEW_CORES: "atari800 bluemsx cap32 freechaf freeintv gw mednafen_supergrafx o2em pokemini"
+      BASELINE_ARTIFACT_ID: "10608406202"
 
     steps:
       - name: Checkout
@@ -71,58 +70,12 @@ jobs:
           cores = sorted(core_dir.glob("*.SELF"))
           if len(cores) != 15:
               raise SystemExit(f"Expected 15 Retrovicios cores, found {len(cores)}")
-          print("Verified Retrovicios cores:", len(cores))
+          print("Verified Retrovicios v1.4 cores:", len(cores))
           PY
 
           rm -rf retrohub/pkgfiles/USRDIR/cores
           mkdir -p retrohub/pkgfiles/USRDIR/cores
           cp /tmp/baseline-extracted/RVIC00001/USRDIR/cores/*.SELF retrohub/pkgfiles/USRDIR/cores/
-
-      - name: Build additional Retrovicios cores
-        run: |
-          sudo apt-get install -y git cmake rsync nvidia-cg-toolkit
-          git clone --depth 1 https://github.com/libretro/libretro-super.git
-          cd libretro-super
-          ./libretro-fetch.sh --shallow --retroarch $NEW_CORES
-          JOBS=2 ./libretro-build-psl1ght.sh $NEW_CORES
-
-          python3 - <<'PY'
-          from pathlib import Path
-          p=Path("retroarch/frontend/drivers/platform_ps3.c")
-          s=p.read_text()
-          s=s.replace('#define EMULATOR_CONTENT_DIR "SSNE10001"',
-                      '#define EMULATOR_CONTENT_DIR "RVIC00001"',1)
-          old='''static void frontend_ps3_shutdown(bool unused)
-          {
-             sysProcessExit(0);
-          }'''
-          new='''static void frontend_ps3_shutdown(bool unused)
-          {
-             const char *retrovicios = "/dev_hdd0/game/RVIC00001/USRDIR/retrovicios.self";
-             (void)unused;
-             sysProcessExitSpawn2(retrovicios, NULL, NULL, NULL, 0, 1000,
-                   SYS_PROCESS_SPAWN_STACK_SIZE_1M);
-          }'''
-          if old in s:
-              s=s.replace(old,new,1)
-          p.write_text(s)
-          PY
-
-          mkdir -p retroarch/pkg/psl1ght/pkg/USRDIR/cores
-          cp dist/psl1ght/*_libretro_psl1ght.a retroarch/dist-scripts/
-          cd retroarch/dist-scripts
-          chmod +x dist-cores.sh
-          set +e
-          ./dist-cores.sh psl1ght
-          set -e
-          cp ../pkg/psl1ght/pkg/USRDIR/cores/*.SELF "$GITHUB_WORKSPACE/retrohub/pkgfiles/USRDIR/cores/"
-
-          for core in $NEW_CORES; do
-            test -f "$GITHUB_WORKSPACE/retrohub/pkgfiles/USRDIR/cores/${core}_libretro_psl1ght.SELF" || {
-              echo "Missing new core: $core"
-              exit 1
-            }
-          done
 
       - name: Assemble Retrovicios package tree
         run: |
@@ -161,7 +114,7 @@ jobs:
           screenshot_directory = "/dev_hdd0/game/RVIC00001/USRDIR/screenshots"
           EOF
 
-          echo "Retrovicios PS3 v1.4 - sistemas ampliados" > retrohub/pkgfiles/USRDIR/data/README.TXT
+          echo "Retrovicios PS3 v1.5 - soporte ZIP y 7Z" > retrohub/pkgfiles/USRDIR/data/README.TXT
           echo "Usa tus copias legales en /RETROVICIOS/roms/<sistema>/ del USB." > retrohub/pkgfiles/USRDIR/roms/README.TXT
           test "$(find retrohub/pkgfiles/USRDIR/cores -maxdepth 1 -name '*.SELF' | wc -l)" -ge 24
 
@@ -171,12 +124,12 @@ jobs:
           "$PS3DEV/portlibs/ppu/bin/sdl2-config" --version
           cd retrohub
           make -f Makefile.ps3 clean all
-          cp retrovicios_ps3.pkg "$GITHUB_WORKSPACE/Retrovicios_PS3_v1.4_MasSistemas.pkg"
-          ls -lh "$GITHUB_WORKSPACE/Retrovicios_PS3_v1.4_MasSistemas.pkg"
+          cp retrovicios_ps3.pkg "$GITHUB_WORKSPACE/Retrovicios_PS3_v1.5_Comprimidos.pkg"
+          ls -lh "$GITHUB_WORKSPACE/Retrovicios_PS3_v1.5_Comprimidos.pkg"
 
       - name: Upload final package
         uses: actions/upload-artifact@v4
         with:
-          name: Retrovicios_PS3_v1.4_MasSistemas
-          path: Retrovicios_PS3_v1.4_MasSistemas.pkg
+          name: Retrovicios_PS3_v1.5_Comprimidos
+          path: Retrovicios_PS3_v1.5_Comprimidos.pkg
           if-no-files-found: error
