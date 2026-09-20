@@ -4,7 +4,7 @@
 #include <stddef.h>
 
 #define RH_MAX_SYSTEMS 32
-#define RH_MAX_GAMES 4096
+#define RH_MAX_GAMES 8192
 #define RH_PATH_MAX 512
 #define RH_NAME_MAX 128
 #define RH_MAX_FAVORITES 512
