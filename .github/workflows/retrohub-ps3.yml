@@ -42,7 +42,7 @@ jobs:
           echo "$GITHUB_WORKSPACE/ps3dev/ppu/bin" >> "$GITHUB_PATH"
           echo "$GITHUB_WORKSPACE/ps3dev/spu/bin" >> "$GITHUB_PATH"
 
-      - name: Reuse verified Retrovicios v1.0 cores
+      - name: Reuse verified Retrovicios v1.4 cores
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -68,8 +68,8 @@ jobs:
           PyKG.extract_pkg(pkg, out)
           core_dir = out / "RVIC00001" / "USRDIR" / "cores"
           cores = sorted(core_dir.glob("*.SELF"))
-          if len(cores) != 15:
-              raise SystemExit(f"Expected 15 Retrovicios cores, found {len(cores)}")
+          if len(cores) < 24:
+              raise SystemExit(f"Expected at least 24 Retrovicios cores, found {len(cores)}")
           print("Verified Retrovicios v1.4 cores:", len(cores))
           PY
 
