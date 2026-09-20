@@ -437,7 +437,7 @@ static void draw_ui(SDL_Surface *screen,const RHCatalog *cat,const RHState *st,i
     rh_draw_text(screen,248,672,"CUADRADO FAVORITO",1,white,0);
     rh_draw_text(screen,438,672,"TRIANGULO REESCANEAR",1,white,0);
     if(status && status[0])rh_draw_text(screen,730,672,status,1,blue,65);
-    else rh_draw_text(screen,730,672,"RETROVICIOS v1.8",1,muted,0);
+    else rh_draw_text(screen,730,672,"RETROVICIOS v1.9",1,muted,0);
 
     present_screen(screen);
 }
@@ -475,7 +475,7 @@ int main(int argc,char **argv)
     char status[96]="";
     (void)argc;(void)argv;
 
-    boot_log("Retrovicios v1.8 boot");
+    boot_log("Retrovicios v1.9 boot");
     SDL_SetMainReady();
     if(SDL_Init(SDL_INIT_VIDEO)<0){boot_log("SDL video init failed");return 1;}
 
@@ -573,7 +573,14 @@ int main(int argc,char **argv)
                         rh_state_save(state,STATE_FILE);
                         snprintf(status,sizeof(status),"ABRIENDO %.65s",g->name);
                         draw_ui(screen,catalog,state,view,focus,game_sel,indices,filtered,status);
-                        rh_launch_game_ps3(g);
+                        {
+                            int launch_rc=rh_launch_game_ps3(g);
+                            if(launch_rc==-50) snprintf(status,sizeof(status),"FALTA BIOS SEGA CD EN RETROVICIOS/system");
+                            else if(launch_rc==-51) snprintf(status,sizeof(status),"FALTA bios_CD_U.bin (USA)");
+                            else if(launch_rc==-52) snprintf(status,sizeof(status),"FALTA bios_CD_E.bin (EUROPA)");
+                            else if(launch_rc==-53) snprintf(status,sizeof(status),"FALTA bios_CD_J.bin (JAPON)");
+                            else if(launch_rc<0) snprintf(status,sizeof(status),"NO SE PUDO ABRIR EL JUEGO (%d)",launch_rc);
+                        }
                     }
                 }
             }
