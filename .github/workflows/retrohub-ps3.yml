@@ -19,7 +19,7 @@ jobs:
     timeout-minutes: 25
     env:
       BASELINE_ARTIFACT_ID: "10594671183"
-      NEW_CORES: "atari800 bluemsx cap32 fbalpha2012_neogeo freechaf freeintv gw mednafen_supergrafx neocd o2em picodrive pokemini"
+      NEW_CORES: "atari800 bluemsx cap32 freechaf freeintv gw mednafen_supergrafx o2em pokemini"
 
     steps:
       - name: Checkout
@@ -163,7 +163,7 @@ jobs:
 
           echo "Retrovicios PS3 v1.4 - sistemas ampliados" > retrohub/pkgfiles/USRDIR/data/README.TXT
           echo "Usa tus copias legales en /RETROVICIOS/roms/<sistema>/ del USB." > retrohub/pkgfiles/USRDIR/roms/README.TXT
-          test "$(find retrohub/pkgfiles/USRDIR/cores -maxdepth 1 -name '*.SELF' | wc -l)" -ge 27
+          test "$(find retrohub/pkgfiles/USRDIR/cores -maxdepth 1 -name '*.SELF' | wc -l)" -ge 24
 
       - name: Build Retrovicios fixed PKG
         run: |
