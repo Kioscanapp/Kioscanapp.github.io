@@ -25,7 +25,6 @@ const RHSystem rh_systems[] = {
     {"msx",      "MSX / MSX2",            "roms/msx",      "rom|mx1|mx2|dsk|cas",     "cores/fmsx_libretro_psl1ght.SELF"},
     {"arcade",   "Arcade",                "roms/arcade",   "zip|7z",                  "cores/mame2003_libretro_psl1ght.SELF"},
     {"sg1000",   "Sega SG-1000",          "roms/sg1000",   "sg|sms|bin|rom",           "cores/genesis_plus_gx_libretro_psl1ght.SELF"},
-    {"sega32x",  "Sega 32X",              "roms/sega32x",  "32x|bin|md|smd",           "cores/picodrive_libretro_psl1ght.SELF"},
     {"atari5200","Atari 5200",             "roms/atari5200","a52|bin|rom",              "cores/atari800_libretro_psl1ght.SELF"},
     {"coleco",   "ColecoVision",           "roms/coleco",   "col|rom|bin|zip",          "cores/bluemsx_libretro_psl1ght.SELF"},
     {"intv",     "Intellivision",          "roms/intv",     "int|bin|rom",              "cores/freeintv_libretro_psl1ght.SELF"},
@@ -34,8 +33,6 @@ const RHSystem rh_systems[] = {
     {"gw",       "Game & Watch",           "roms/gw",       "mgw|zip",                  "cores/gw_libretro_psl1ght.SELF"},
     {"pokemini", "Pokemon Mini",           "roms/pokemini", "min",                     "cores/pokemini_libretro_psl1ght.SELF"},
     {"supergrafx","PC Engine SuperGrafx",  "roms/supergrafx","pce|sgx|bin",             "cores/mednafen_supergrafx_libretro_psl1ght.SELF"},
-    {"neogeo",   "Neo Geo AES",            "roms/neogeo",   "zip",                     "cores/fbalpha2012_neogeo_libretro_psl1ght.SELF"},
-    {"neocd",    "Neo Geo CD",             "roms/neocd",    "cue|chd|iso",             "cores/neocd_libretro_psl1ght.SELF"},
     {"gx4000",   "Amstrad GX4000",         "roms/gx4000",   "cpr|dsk|cdt|m3u|zip",      "cores/cap32_libretro_psl1ght.SELF"},
 };
 
