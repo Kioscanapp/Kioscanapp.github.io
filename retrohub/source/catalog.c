@@ -51,7 +51,8 @@ static int rh_detect_mixed_system(const char *filename)
     if (!rh_stricmp(e,"a26")) return rh_system_index_by_id("atari2600");
     if (!rh_stricmp(e,"a78")) return rh_system_index_by_id("atari7800");
     if (!rh_stricmp(e,"lnx")) return rh_system_index_by_id("lynx");
-    if (!rh_stricmp(e,"pce")) return rh_system_index_by_id("pce");\n    if (!rh_stricmp(e,"cue") || !rh_stricmp(e,"chd") || !rh_stricmp(e,"iso")) return rh_system_index_by_id("segacd");
+    if (!rh_stricmp(e,"pce")) return rh_system_index_by_id("pce");
+    if (!rh_stricmp(e,"cue") || !rh_stricmp(e,"chd") || !rh_stricmp(e,"iso")) return rh_system_index_by_id("segacd");
     if (!rh_stricmp(e,"ngp") || !rh_stricmp(e,"ngc")) return rh_system_index_by_id("ngp");
     if (!rh_stricmp(e,"ws") || !rh_stricmp(e,"wsc")) return rh_system_index_by_id("wswan");
     if (!rh_stricmp(e,"vb") || !rh_stricmp(e,"vboy")) return rh_system_index_by_id("virtualboy");
