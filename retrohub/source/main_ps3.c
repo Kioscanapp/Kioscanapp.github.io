@@ -1,4 +1,4 @@
-/* Retrovicios PS3 v1.0 - neon grid frontend. */
+/* Retrovicios PS3 v1.6 - auto ROM classification. */
 #include "retrohub.h"
 
 #include <stdio.h>
@@ -346,7 +346,7 @@ int main(int argc,char **argv)
     char status[96]="";
     (void)argc;(void)argv;
 
-    boot_log("Retrovicios v1.5 boot");
+    boot_log("Retrovicios v1.6 boot");
     SDL_SetMainReady();
     if(SDL_Init(SDL_INIT_VIDEO)<0){boot_log("SDL video init failed");return 1;}
     boot_log("SDL2 video init OK");
