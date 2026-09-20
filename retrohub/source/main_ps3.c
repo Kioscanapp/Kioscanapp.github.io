@@ -1,4 +1,4 @@
-/* Retrovicios PS3 v1.7 - modern cover frontend. */
+/* Retrovicios PS3 v1.8 - lightweight modern frontend. */
 #include "retrohub.h"
 
 #include <stdio.h>
@@ -25,12 +25,8 @@
 #define INSTALL_ROOT "/dev_hdd0/game/RVIC00001/USRDIR"
 #define STATE_FILE INSTALL_ROOT "/data/state.txt"
 #define VISIBLE_VIEWS 11
-#define GRID_COLS 3
-#define GRID_ROWS 2
-#define GRID_PAGE (GRID_COLS * GRID_ROWS)
-#define COVER_CACHE_SIZE 10
+#define LIST_ROWS 10
 
-/* SDL2_PSL1GHT button order from its PS3 joystick driver. */
 #define PAD_LEFT 0
 #define PAD_DOWN 1
 #define PAD_RIGHT 2
@@ -54,34 +50,18 @@ static SDL_Window *g_window = NULL;
 static SDL_Renderer *g_renderer = NULL;
 static SDL_Texture *g_texture = NULL;
 
-/* Keep large structures off the PS3 process stack. */
 static RHCatalog g_catalog;
 static RHState g_state;
 static int g_indices[RH_MAX_FILTERED];
 
-typedef struct {
-    char path[RH_PATH_MAX];
-    SDL_Surface *surface;
-    unsigned long stamp;
-} RHCoverCacheEntry;
-
-static RHCoverCacheEntry g_cover_cache[COVER_CACHE_SIZE];
-static unsigned long g_cover_stamp = 1;
+/* Only one cover is kept in memory. This avoids the slowdown of v1.7. */
+static SDL_Surface *g_selected_cover = NULL;
+static char g_selected_cover_game[RH_PATH_MAX];
 
 static void boot_log(const char *message)
 {
     FILE *f=fopen(INSTALL_ROOT "/data/boot.log","a");
     if(f){fprintf(f,"%s\n",message);fclose(f);}
-}
-
-static int present_screen(SDL_Surface *screen)
-{
-    if(!screen || !g_renderer || !g_texture) return -1;
-    if(SDL_UpdateTexture(g_texture,NULL,screen->pixels,screen->pitch)!=0) return -2;
-    SDL_RenderClear(g_renderer);
-    if(SDL_RenderCopy(g_renderer,g_texture,NULL,NULL)!=0) return -3;
-    SDL_RenderPresent(g_renderer);
-    return 0;
 }
 
 static void fill_rect(SDL_Surface *s,int x,int y,int w,int h,Uint32 c)
@@ -98,16 +78,14 @@ static void frame_rect(SDL_Surface *s,int x,int y,int w,int h,int t,Uint32 c)
     fill_rect(s,x+w-t,y,t,h,c);
 }
 
-static void draw_background(SDL_Surface *screen)
+static int present_screen(SDL_Surface *screen)
 {
-    int y;
-    for(y=0;y<WINDOW_H;y+=8){
-        int t=(y*30)/WINDOW_H;
-        Uint32 c=SDL_MapRGB(screen->format,(Uint8)(5+t/4),(Uint8)(12+t/2),(Uint8)(24+t));
-        fill_rect(screen,0,y,WINDOW_W,8,c);
-    }
-    fill_rect(screen,0,0,WINDOW_W,90,SDL_MapRGB(screen->format,8,18,34));
-    fill_rect(screen,0,88,WINDOW_W,2,SDL_MapRGB(screen->format,27,92,145));
+    if(!screen || !g_renderer || !g_texture)return -1;
+    if(SDL_UpdateTexture(g_texture,NULL,screen->pixels,screen->pitch)!=0)return -2;
+    SDL_RenderClear(g_renderer);
+    if(SDL_RenderCopy(g_renderer,g_texture,NULL,NULL)!=0)return -3;
+    SDL_RenderPresent(g_renderer);
+    return 0;
 }
 
 static int view_count(void){return 3+(int)rh_system_count;}
@@ -139,23 +117,24 @@ static const char *system_short_name(int system_index)
         "COLECOVISION","INTELLIVISION","ODYSSEY2","CHANNEL F","GAME & WATCH","POKEMON MINI",
         "SUPERGRAFX","GX4000"
     };
-    if(system_index < 0 || system_index >= (int)(sizeof(shorts)/sizeof(shorts[0]))) return "RETRO";
+    if(system_index<0 || system_index>=(int)(sizeof(shorts)/sizeof(shorts[0])))return "RETRO";
     return shorts[system_index];
 }
 
-static Uint32 system_color(SDL_Surface *screen,int system_index,int dim)
+static Uint32 system_color(SDL_Surface *screen,int system_index,int dark)
 {
-    static const unsigned char rgb[][3] = {
-        {42,168,255},{121,92,255},{50,210,172},{255,162,72},{82,145,255},{255,76,115},
-        {55,190,255},{255,197,62},{255,101,101},{96,214,109},{62,202,185},{65,135,255},
-        {195,95,224},{151,215,78},{226,87,168},{67,206,235},{84,169,224},{242,121,55}
+    static const unsigned char rgb[][3]={
+        {48,155,255},{138,103,255},{45,205,169},{245,150,66},{62,139,245},{242,78,104},
+        {53,183,242},{244,192,56},{235,91,91},{92,205,104},{51,194,176},{61,126,238},
+        {192,91,216},{145,205,78},{219,84,161},{59,194,220},{80,158,219},{234,114,48}
     };
     int n=(int)(sizeof(rgb)/sizeof(rgb[0]));
     int i=system_index;
     int r,g,b;
-    if(i<0)i=0; i%=n;
-    r=rgb[i][0]; g=rgb[i][1]; b=rgb[i][2];
-    if(dim){r/=3;g/=3;b/=3;}
+    if(i<0)i=0;
+    i%=n;
+    r=rgb[i][0];g=rgb[i][1];b=rgb[i][2];
+    if(dark){r/=3;g/=3;b/=3;}
     return SDL_MapRGB(screen->format,(Uint8)r,(Uint8)g,(Uint8)b);
 }
 
@@ -167,15 +146,15 @@ static void rebuild_filter(const RHCatalog *cat,const RHState *st,int view,int *
     else if((size_t)*sel>=*count)*sel=(int)*count-1;
 }
 
-static int path_without_extension(const char *name,char *out,size_t out_n)
+static int path_without_extension(const char *path,char *out,size_t out_n)
 {
-    const char *base=strrchr(name,'/');
+    const char *base=strrchr(path,'/');
     const char *dot;
     size_t len;
-    base=base?base+1:name;
+    if(!out || out_n==0)return 0;
+    base=base?base+1:path;
     dot=strrchr(base,'.');
     len=dot?(size_t)(dot-base):strlen(base);
-    if(!out_n)return 0;
     if(len>=out_n)len=out_n-1;
     memcpy(out,base,len);
     out[len]='\0';
@@ -185,27 +164,32 @@ static int path_without_extension(const char *name,char *out,size_t out_n)
 static int find_cover_path(const RHGame *g,char *out,size_t out_n)
 {
     static const char *exts[]={"jpg","jpeg","png","bmp"};
-    const char *mark=strstr(g->path,"/roms/");
-    const char *slash=strrchr(g->path,'/');
-    char root[RH_PATH_MAX],base[RH_NAME_MAX],dir[RH_PATH_MAX];
-    size_t i,root_len,dir_len;
+    const char *mark;
+    const char *slash;
+    char root[RH_PATH_MAX],dir[RH_PATH_MAX],base[RH_NAME_MAX];
+    size_t root_len,dir_len,i;
 
-    if(!g || !out || out_n==0 || !mark || !slash)return 0;
+    if(!g || !out || out_n==0)return 0;
+    mark=strstr(g->path,"/roms/");
+    slash=strrchr(g->path,'/');
+    if(!mark || !slash)return 0;
+
     root_len=(size_t)(mark-g->path);
     if(root_len>=sizeof(root))return 0;
-    memcpy(root,g->path,root_len); root[root_len]='\0';
-    path_without_extension(g->path,base,sizeof(base));
+    memcpy(root,g->path,root_len);root[root_len]='\0';
 
     dir_len=(size_t)(slash-g->path);
     if(dir_len>=sizeof(dir))dir_len=sizeof(dir)-1;
-    memcpy(dir,g->path,dir_len); dir[dir_len]='\0';
+    memcpy(dir,g->path,dir_len);dir[dir_len]='\0';
+
+    path_without_extension(g->path,base,sizeof(base));
 
     for(i=0;i<sizeof(exts)/sizeof(exts[0]);++i){
-        snprintf(out,out_n,"%s/covers/%s/%s.%s",root,rh_systems[g->system_index].id,base,exts[i]);
+        snprintf(out,out_n,"%s/covers/%s.%s",root,base,exts[i]);
         if(rh_file_exists(out))return 1;
     }
     for(i=0;i<sizeof(exts)/sizeof(exts[0]);++i){
-        snprintf(out,out_n,"%s/covers/%s.%s",root,base,exts[i]);
+        snprintf(out,out_n,"%s/covers/%s/%s.%s",root,rh_systems[g->system_index].id,base,exts[i]);
         if(rh_file_exists(out))return 1;
     }
     for(i=0;i<sizeof(exts)/sizeof(exts[0]);++i){
@@ -216,201 +200,213 @@ static int find_cover_path(const RHGame *g,char *out,size_t out_n)
     return 0;
 }
 
-static SDL_Surface *load_image_surface(SDL_Surface *screen,const char *path)
+static SDL_Surface *decode_cover(SDL_Surface *screen,const char *path)
 {
     int w=0,h=0,n=0;
-    unsigned char *pixels=stbi_load(path,&w,&h,&n,4);
-    SDL_Surface *raw,*converted;
+    unsigned char *pixels;
+    SDL_Surface *raw=NULL,*converted=NULL,*scaled=NULL;
+    SDL_Rect dst={0,0,256,352};
+
+    pixels=stbi_load(path,&w,&h,&n,4);
     if(!pixels || w<=0 || h<=0)return NULL;
 
 #if SDL_BYTEORDER == SDL_BIG_ENDIAN
-    raw=SDL_CreateRGBSurfaceFrom(pixels,w,h,32,w*4,
-                                 0xFF000000,0x00FF0000,0x0000FF00,0x000000FF);
+    raw=SDL_CreateRGBSurfaceFrom(pixels,w,h,32,w*4,0xFF000000,0x00FF0000,0x0000FF00,0x000000FF);
 #else
-    raw=SDL_CreateRGBSurfaceFrom(pixels,w,h,32,w*4,
-                                 0x000000FF,0x0000FF00,0x00FF0000,0xFF000000);
+    raw=SDL_CreateRGBSurfaceFrom(pixels,w,h,32,w*4,0x000000FF,0x0000FF00,0x00FF0000,0xFF000000);
 #endif
-    if(!raw){stbi_image_free(pixels);return NULL;}
-    converted=SDL_ConvertSurface(raw,screen->format,0);
-    SDL_FreeSurface(raw);
+    if(raw)converted=SDL_ConvertSurface(raw,screen->format,0);
+    if(raw)SDL_FreeSurface(raw);
     stbi_image_free(pixels);
-    return converted;
-}
+    if(!converted)return NULL;
 
-static SDL_Surface *cover_for_game(SDL_Surface *screen,const RHGame *g)
-{
-    char path[RH_PATH_MAX];
-    int i,slot=-1;
-    unsigned long oldest=~0UL;
+    scaled=SDL_CreateRGBSurfaceWithFormat(0,256,352,screen->format->BitsPerPixel,screen->format->format);
+    if(!scaled){SDL_FreeSurface(converted);return NULL;}
+    SDL_FillRect(scaled,NULL,SDL_MapRGB(scaled->format,5,10,18));
 
-    if(!find_cover_path(g,path,sizeof(path)))return NULL;
-
-    for(i=0;i<COVER_CACHE_SIZE;++i){
-        if(g_cover_cache[i].surface && strcmp(g_cover_cache[i].path,path)==0){
-            g_cover_cache[i].stamp=g_cover_stamp++;
-            return g_cover_cache[i].surface;
+    {
+        float sr=(float)converted->w/(float)converted->h;
+        float dr=256.0f/352.0f;
+        SDL_Rect d;
+        if(sr>dr){
+            d.h=352;
+            d.w=(int)(352.0f*sr);
+        }else{
+            d.w=256;
+            d.h=(int)(256.0f/sr);
         }
-        if(!g_cover_cache[i].surface){slot=i;oldest=0;break;}
-        if(g_cover_cache[i].stamp<oldest){oldest=g_cover_cache[i].stamp;slot=i;}
+        d.x=(256-d.w)/2;
+        d.y=(352-d.h)/2;
+        SDL_SetClipRect(scaled,&dst);
+        SDL_BlitScaled(converted,NULL,scaled,&d);
+        SDL_SetClipRect(scaled,NULL);
     }
 
-    if(slot<0)slot=0;
-    if(g_cover_cache[slot].surface){
-        SDL_FreeSurface(g_cover_cache[slot].surface);
-        g_cover_cache[slot].surface=NULL;
-    }
-    g_cover_cache[slot].surface=load_image_surface(screen,path);
-    if(!g_cover_cache[slot].surface){
-        g_cover_cache[slot].path[0]='\0';
-        return NULL;
-    }
-    snprintf(g_cover_cache[slot].path,sizeof(g_cover_cache[slot].path),"%s",path);
-    g_cover_cache[slot].stamp=g_cover_stamp++;
-    return g_cover_cache[slot].surface;
+    SDL_FreeSurface(converted);
+    return scaled;
 }
 
-static void free_cover_cache(void)
+static SDL_Surface *selected_cover(SDL_Surface *screen,const RHGame *g)
 {
-    int i;
-    for(i=0;i<COVER_CACHE_SIZE;++i){
-        if(g_cover_cache[i].surface)SDL_FreeSurface(g_cover_cache[i].surface);
-        g_cover_cache[i].surface=NULL;
-    }
+    char cover_path[RH_PATH_MAX];
+
+    if(!g)return NULL;
+    if(strcmp(g_selected_cover_game,g->path)==0)return g_selected_cover;
+
+    if(g_selected_cover){SDL_FreeSurface(g_selected_cover);g_selected_cover=NULL;}
+    snprintf(g_selected_cover_game,sizeof(g_selected_cover_game),"%s",g->path);
+
+    if(find_cover_path(g,cover_path,sizeof(cover_path)))
+        g_selected_cover=decode_cover(screen,cover_path);
+
+    return g_selected_cover;
 }
 
-static void blit_cover(SDL_Surface *screen,SDL_Surface *cover,int x,int y,int w,int h)
+static void draw_background(SDL_Surface *screen)
 {
-    SDL_Rect src,dst;
-    float sr,dr;
-    int nw,nh;
-    if(!cover)return;
+    int y;
+    Uint32 top=SDL_MapRGB(screen->format,6,14,27);
+    Uint32 mid=SDL_MapRGB(screen->format,8,20,36);
+    Uint32 bottom=SDL_MapRGB(screen->format,4,10,19);
 
-    sr=(float)cover->w/(float)cover->h;
-    dr=(float)w/(float)h;
-    if(sr>dr){
-        nh=h;
-        nw=(int)(h*sr);
-    }else{
-        nw=w;
-        nh=(int)(w/sr);
+    fill_rect(screen,0,0,WINDOW_W,WINDOW_H,bottom);
+    for(y=0;y<WINDOW_H;y+=12){
+        Uint32 c=(y<240)?top:((y<520)?mid:bottom);
+        fill_rect(screen,0,y,WINDOW_W,12,c);
     }
-    src.x=0;src.y=0;src.w=cover->w;src.h=cover->h;
-    dst.x=x+(w-nw)/2;dst.y=y+(h-nh)/2;dst.w=nw;dst.h=nh;
-
-    SDL_SetClipRect(screen,&(SDL_Rect){x,y,w,h});
-    SDL_BlitScaled(cover,&src,screen,&dst);
-    SDL_SetClipRect(screen,NULL);
+    fill_rect(screen,0,88,WINDOW_W,2,SDL_MapRGB(screen->format,36,87,126));
 }
 
-static void draw_fallback_cover(SDL_Surface *screen,const RHGame *g,int x,int y,int w,int h)
+static void draw_logo(SDL_Surface *screen)
 {
-    Uint32 c=system_color(screen,g->system_index,0);
-    Uint32 dark=system_color(screen,g->system_index,1);
-    Uint32 white=SDL_MapRGB(screen->format,240,246,252);
-    int i;
-    fill_rect(screen,x,y,w,h,dark);
-    for(i=0;i<h;i+=14){
-        if(((i/14)&1)==0)fill_rect(screen,x,y+i,w,7,c);
-    }
-    fill_rect(screen,x+12,y+18,w-24,h-36,SDL_MapRGB(screen->format,11,19,31));
-    rh_draw_text(screen,x+24,y+42,"RETROVICIOS",2,c,14);
-    rh_draw_text(screen,x+24,y+h/2-12,system_short_name(g->system_index),2,white,18);
-    rh_draw_text(screen,x+24,y+h-58,g->name,1,white,20);
-}
-
-static void draw_game_card(SDL_Surface *screen,const RHGame *g,int x,int y,int w,int h,int selected,int favorite)
-{
-    Uint32 panel=SDL_MapRGB(screen->format,15,27,43);
-    Uint32 border=SDL_MapRGB(screen->format,39,61,84);
-    Uint32 white=SDL_MapRGB(screen->format,238,244,250);
-    Uint32 muted=SDL_MapRGB(screen->format,147,164,181);
-    Uint32 accent=system_color(screen,g->system_index,0);
-    SDL_Surface *cover=cover_for_game(screen,g);
-
-    fill_rect(screen,x+5,y+7,w,h,SDL_MapRGB(screen->format,2,7,14));
-    fill_rect(screen,x,y,w,h,panel);
-    frame_rect(screen,x,y,w,h,selected?3:1,selected?accent:border);
-
-    fill_rect(screen,x+8,y+8,w-16,h-48,SDL_MapRGB(screen->format,5,10,18));
-    if(cover)blit_cover(screen,cover,x+8,y+8,w-16,h-48);
-    else draw_fallback_cover(screen,g,x+8,y+8,w-16,h-48);
-
-    rh_draw_text(screen,x+10,y+h-34,g->name,1,white,22);
-    rh_draw_text(screen,x+10,y+h-18,system_short_name(g->system_index),1,muted,22);
-    if(favorite)rh_draw_text(screen,x+w-22,y+10,"*",2,accent,1);
+    Uint32 white=SDL_MapRGB(screen->format,240,245,250);
+    Uint32 blue=SDL_MapRGB(screen->format,60,166,255);
+    rh_draw_text(screen,30,25,"RETROVICIOS",4,white,0);
+    fill_rect(screen,31,67,142,3,blue);
+    rh_draw_text(screen,188,61,"PS3",1,blue,0);
 }
 
 static void draw_sidebar(SDL_Surface *screen,int view,int focus)
 {
-    Uint32 panel=SDL_MapRGB(screen->format,9,20,34);
-    Uint32 panel_sel=SDL_MapRGB(screen->format,20,43,67);
+    Uint32 panel=SDL_MapRGB(screen->format,10,22,36);
+    Uint32 selected=SDL_MapRGB(screen->format,19,45,70);
     Uint32 white=SDL_MapRGB(screen->format,238,244,250);
-    Uint32 muted=SDL_MapRGB(screen->format,128,151,173);
-    Uint32 accent=SDL_MapRGB(screen->format,65,173,255);
+    Uint32 muted=SDL_MapRGB(screen->format,131,151,171);
+    Uint32 blue=SDL_MapRGB(screen->format,60,166,255);
     int vf=0,row;
 
-    fill_rect(screen,18,108,202,538,panel);
-    frame_rect(screen,18,108,202,538,1,SDL_MapRGB(screen->format,31,59,84));
-    rh_draw_text(screen,38,128,"BIBLIOTECA",2,white,0);
+    fill_rect(screen,20,108,210,532,panel);
+    frame_rect(screen,20,108,210,532,1,SDL_MapRGB(screen->format,34,61,84));
+    rh_draw_text(screen,40,128,"BIBLIOTECA",2,white,0);
 
     if(view>=VISIBLE_VIEWS)vf=view-VISIBLE_VIEWS+1;
     for(row=0;row<VISIBLE_VIEWS && vf+row<view_count();++row){
         int v=vf+row;
-        int yy=166+row*42;
+        int yy=166+row*41;
         if(v==view){
-            fill_rect(screen,28,yy-9,182,34,panel_sel);
-            fill_rect(screen,28,yy-9,4,34,accent);
+            fill_rect(screen,30,yy-9,190,32,selected);
+            fill_rect(screen,30,yy-9,4,32,blue);
         }
-        rh_draw_text(screen,42,yy,view_name(v),1,v==view?white:muted,23);
+        rh_draw_text(screen,43,yy,view_name(v),1,v==view?white:muted,24);
     }
-    if(focus==0)frame_rect(screen,18,108,202,538,2,accent);
+    if(focus==0)frame_rect(screen,20,108,210,532,2,blue);
+}
+
+static void draw_game_list(SDL_Surface *screen,const RHCatalog *cat,const RHState *st,
+                           const int *indices,size_t filtered,int game_sel,int focus)
+{
+    Uint32 panel=SDL_MapRGB(screen->format,10,22,36);
+    Uint32 row=SDL_MapRGB(screen->format,13,28,45);
+    Uint32 selected=SDL_MapRGB(screen->format,25,53,81);
+    Uint32 white=SDL_MapRGB(screen->format,238,244,250);
+    Uint32 muted=SDL_MapRGB(screen->format,132,153,174);
+    int first=(game_sel/LIST_ROWS)*LIST_ROWS;
+    int i;
+
+    fill_rect(screen,244,108,548,532,panel);
+    frame_rect(screen,244,108,548,532,1,SDL_MapRGB(screen->format,34,61,84));
+
+    for(i=0;i<LIST_ROWS && first+i<(int)filtered;++i){
+        int pos=first+i;
+        const RHGame *g=&cat->games[indices[pos]];
+        int y=126+i*49;
+        Uint32 accent=system_color(screen,g->system_index,0);
+        char idxbuf[16];
+
+        fill_rect(screen,258,y,520,41,pos==game_sel?selected:row);
+        if(pos==game_sel)fill_rect(screen,258,y,5,41,accent);
+        snprintf(idxbuf,sizeof(idxbuf),"%02d",pos+1);
+        rh_draw_text(screen,272,y+14,idxbuf,1,muted,0);
+        rh_draw_text(screen,306,y+10,g->name,2,white,27);
+        rh_draw_text(screen,615,y+15,system_short_name(g->system_index),1,accent,18);
+        if(rh_state_is_favorite(st,g->path))rh_draw_text(screen,754,y+12,"*",2,accent,1);
+    }
+
+    if(filtered==0){
+        rh_draw_text(screen,330,305,"NO HAY JUEGOS",3,muted,0);
+        rh_draw_text(screen,320,348,"TRIANGULO PARA REESCANEAR",1,muted,0);
+    }
+
+    if(focus==1)frame_rect(screen,244,108,548,532,2,SDL_MapRGB(screen->format,60,166,255));
+}
+
+static void draw_cover_placeholder(SDL_Surface *screen,const RHGame *g,int x,int y,int w,int h)
+{
+    Uint32 accent=system_color(screen,g->system_index,0);
+    Uint32 dark=system_color(screen,g->system_index,1);
+    Uint32 white=SDL_MapRGB(screen->format,240,245,250);
+    int i;
+
+    fill_rect(screen,x,y,w,h,dark);
+    for(i=0;i<h;i+=22){
+        if(((i/22)&1)==0)fill_rect(screen,x,y+i,w,8,accent);
+    }
+    fill_rect(screen,x+14,y+20,w-28,h-40,SDL_MapRGB(screen->format,7,15,26));
+    rh_draw_text(screen,x+28,y+42,"RETROVICIOS",2,accent,16);
+    rh_draw_text(screen,x+28,y+h/2-15,system_short_name(g->system_index),3,white,14);
+    rh_draw_text(screen,x+28,y+h-66,g->name,1,white,21);
 }
 
 static void draw_preview(SDL_Surface *screen,const RHCatalog *cat,const RHState *st,
                          const int *indices,size_t filtered,int game_sel)
 {
-    const int x=835,y=108,w=427,h=538;
-    Uint32 panel=SDL_MapRGB(screen->format,9,20,34);
+    const int x=808,y=108,w=452,h=532;
+    Uint32 panel=SDL_MapRGB(screen->format,10,22,36);
     Uint32 white=SDL_MapRGB(screen->format,238,244,250);
-    Uint32 muted=SDL_MapRGB(screen->format,137,157,177);
-    Uint32 border=SDL_MapRGB(screen->format,31,59,84);
+    Uint32 muted=SDL_MapRGB(screen->format,132,153,174);
 
     fill_rect(screen,x,y,w,h,panel);
-    frame_rect(screen,x,y,w,h,1,border);
+    frame_rect(screen,x,y,w,h,1,SDL_MapRGB(screen->format,34,61,84));
 
     if(filtered==0){
-        rh_draw_text(screen,x+34,y+72,"NO HAY JUEGOS",3,white,0);
-        rh_draw_text(screen,x+34,y+118,"COPIA LAS ROMS Y PULSA",1,muted,0);
-        rh_draw_text(screen,x+34,y+138,"TRIANGULO PARA REESCANEAR",1,muted,0);
+        rh_draw_text(screen,x+34,y+70,"SIN SELECCION",3,muted,0);
         return;
     }
 
     {
         const RHGame *g=&cat->games[indices[game_sel]];
         Uint32 accent=system_color(screen,g->system_index,0);
-        SDL_Surface *cover=cover_for_game(screen,g);
+        SDL_Surface *cover=selected_cover(screen,g);
+        SDL_Rect dst={x+22,y+22,256,352};
         char info[96];
-        int fav=rh_state_is_favorite(st,g->path);
 
-        fill_rect(screen,x+20,y+20,190,278,SDL_MapRGB(screen->format,4,10,18));
-        frame_rect(screen,x+20,y+20,190,278,2,accent);
-        if(cover)blit_cover(screen,cover,x+24,y+24,182,270);
-        else draw_fallback_cover(screen,g,x+24,y+24,182,270);
+        fill_rect(screen,x+20,y+20,260,356,SDL_MapRGB(screen->format,4,9,16));
+        frame_rect(screen,x+20,y+20,260,356,2,accent);
+        if(cover)SDL_BlitSurface(cover,NULL,screen,&dst);
+        else draw_cover_placeholder(screen,g,x+22,y+22,256,352);
 
-        rh_draw_text(screen,x+230,y+26,system_short_name(g->system_index),2,accent,19);
-        rh_draw_text(screen,x+230,y+66,g->name,2,white,20);
-        snprintf(info,sizeof(info),"%s",rh_core_available_ps3(g->system_index)?"LISTO PARA JUGAR":"CORE NO DISPONIBLE");
-        rh_draw_text(screen,x+230,y+132,info,1,rh_core_available_ps3(g->system_index)?accent:SDL_MapRGB(screen->format,255,104,104),24);
-        if(fav)rh_draw_text(screen,x+230,y+164,"EN FAVORITOS",1,accent,24);
+        rh_draw_text(screen,x+300,y+26,system_short_name(g->system_index),2,accent,17);
+        rh_draw_text(screen,x+300,y+70,g->name,2,white,18);
+        snprintf(info,sizeof(info),"%s",rh_core_available_ps3(g->system_index)?"LISTO":"FALTA CORE");
+        rh_draw_text(screen,x+300,y+150,info,1,rh_core_available_ps3(g->system_index)?accent:SDL_MapRGB(screen->format,255,100,100),17);
+        if(rh_state_is_favorite(st,g->path))rh_draw_text(screen,x+300,y+182,"FAVORITO",1,accent,17);
 
-        fill_rect(screen,x+20,y+320,w-40,1,border);
-        rh_draw_text(screen,x+20,y+344,"RUTA",1,muted,0);
-        rh_draw_text(screen,x+20,y+365,g->path,1,muted,51);
-
-        rh_draw_text(screen,x+20,y+430,"X  JUGAR",2,white,0);
-        rh_draw_text(screen,x+168,y+432,"CUADRADO  FAVORITO",1,muted,0);
-        rh_draw_text(screen,x+20,y+474,"SELECT + START",2,accent,0);
-        rh_draw_text(screen,x+220,y+478,"VOLVER DESDE EL JUEGO",1,muted,0);
+        fill_rect(screen,x+20,y+396,w-40,1,SDL_MapRGB(screen->format,34,61,84));
+        rh_draw_text(screen,x+20,y+420,"X  JUGAR",2,white,0);
+        rh_draw_text(screen,x+160,y+424,"CUADRADO  FAVORITO",1,muted,0);
+        rh_draw_text(screen,x+20,y+464,"SELECT + START",2,accent,0);
+        rh_draw_text(screen,x+224,y+468,"VOLVER AL MENU",1,muted,0);
+        rh_draw_text(screen,x+20,y+503,"CARATULA: JPG / PNG / BMP",1,muted,0);
     }
 }
 
@@ -418,54 +414,30 @@ static void draw_ui(SDL_Surface *screen,const RHCatalog *cat,const RHState *st,i
                     int game_sel,const int *indices,size_t filtered,const char *status)
 {
     Uint32 white=SDL_MapRGB(screen->format,238,244,250);
-    Uint32 muted=SDL_MapRGB(screen->format,133,154,174);
-    Uint32 accent=SDL_MapRGB(screen->format,65,173,255);
-    Uint32 panel=SDL_MapRGB(screen->format,9,20,34);
-    int i;
-    int first=(game_sel/GRID_PAGE)*GRID_PAGE;
-    char buf[128];
+    Uint32 muted=SDL_MapRGB(screen->format,132,153,174);
+    Uint32 blue=SDL_MapRGB(screen->format,60,166,255);
+    char buf[96];
 
     draw_background(screen);
+    draw_logo(screen);
 
-    rh_draw_text(screen,32,25,"RETROVICIOS",4,white,0);
-    rh_draw_text(screen,36,62,"TU BIBLIOTECA RETRO",1,muted,0);
     snprintf(buf,sizeof(buf),"%d JUEGOS",(int)cat->count);
-    rh_draw_text(screen,1040,28,buf,2,white,0);
+    rh_draw_text(screen,1036,27,buf,2,white,0);
     snprintf(buf,sizeof(buf),"%d FAVORITOS",(int)st->favorite_count);
-    rh_draw_text(screen,1040,57,buf,1,accent,0);
+    rh_draw_text(screen,1036,57,buf,1,blue,0);
 
     draw_sidebar(screen,view,focus);
-
-    fill_rect(screen,232,108,590,538,panel);
-    frame_rect(screen,232,108,590,538,1,SDL_MapRGB(screen->format,31,59,84));
-    rh_draw_text(screen,252,128,view_name(view),2,white,26);
-    snprintf(buf,sizeof(buf),"%d JUEGOS",(int)filtered);
-    rh_draw_text(screen,704,132,buf,1,muted,0);
-
-    for(i=0;i<GRID_PAGE && first+i<(int)filtered;i++){
-        int pos=first+i;
-        int col=i%GRID_COLS,row=i/GRID_COLS;
-        int gx=250+col*188;
-        int gy=166+row*232;
-        const RHGame *g=&cat->games[indices[pos]];
-        draw_game_card(screen,g,gx,gy,174,215,pos==game_sel && focus==1,
-                       rh_state_is_favorite(st,g->path));
-    }
-
-    if(filtered==0){
-        rh_draw_text(screen,338,310,"SIN JUEGOS EN ESTA VISTA",2,muted,0);
-        rh_draw_text(screen,350,344,"TRIANGULO PARA REESCANEAR",1,accent,0);
-    }
-
+    draw_game_list(screen,cat,st,indices,filtered,game_sel,focus);
     draw_preview(screen,cat,st,indices,filtered,game_sel);
 
-    fill_rect(screen,18,660,1244,44,SDL_MapRGB(screen->format,7,16,28));
-    frame_rect(screen,18,660,1244,44,1,SDL_MapRGB(screen->format,31,59,84));
-    rh_draw_text(screen,38,675,"X JUGAR",1,white,0);
-    rh_draw_text(screen,132,675,"O VOLVER",1,white,0);
-    rh_draw_text(screen,244,675,"CUADRADO FAVORITO",1,white,0);
-    rh_draw_text(screen,430,675,"TRIANGULO REESCANEAR",1,white,0);
-    if(status && status[0])rh_draw_text(screen,720,675,status,1,accent,68);
+    fill_rect(screen,20,655,1240,49,SDL_MapRGB(screen->format,7,16,28));
+    frame_rect(screen,20,655,1240,49,1,SDL_MapRGB(screen->format,34,61,84));
+    rh_draw_text(screen,38,672,"X JUGAR",1,white,0);
+    rh_draw_text(screen,134,672,"O VOLVER",1,white,0);
+    rh_draw_text(screen,248,672,"CUADRADO FAVORITO",1,white,0);
+    rh_draw_text(screen,438,672,"TRIANGULO REESCANEAR",1,white,0);
+    if(status && status[0])rh_draw_text(screen,730,672,status,1,blue,65);
+    else rh_draw_text(screen,730,672,"RETROVICIOS v1.8",1,muted,0);
 
     present_screen(screen);
 }
@@ -475,10 +447,11 @@ static void rescan(RHCatalog *cat,const RHState *st,int view,int *indices,size_t
 {
     int n=rh_catalog_scan_roots(cat,roots,sizeof(roots)/sizeof(roots[0]));
     rebuild_filter(cat,st,view,indices,filtered,game_sel);
+    g_selected_cover_game[0]='\0';
     snprintf(status,status_n,"ESCANEO COMPLETO: %d JUEGOS",n);
 }
 
-static void grid_move(int delta,const size_t filtered,int *game_sel)
+static void list_move(int delta,size_t filtered,int *game_sel)
 {
     int next;
     if(!filtered)return;
@@ -502,24 +475,19 @@ int main(int argc,char **argv)
     char status[96]="";
     (void)argc;(void)argv;
 
-    boot_log("Retrovicios v1.7 boot");
+    boot_log("Retrovicios v1.8 boot");
     SDL_SetMainReady();
     if(SDL_Init(SDL_INIT_VIDEO)<0){boot_log("SDL video init failed");return 1;}
 
-    g_window=SDL_CreateWindow("Retrovicios",SDL_WINDOWPOS_UNDEFINED,SDL_WINDOWPOS_UNDEFINED,
-                              WINDOW_W,WINDOW_H,0);
-    if(!g_window){
-        g_window=SDL_CreateWindow("Retrovicios",SDL_WINDOWPOS_UNDEFINED,SDL_WINDOWPOS_UNDEFINED,
-                                  720,480,0);
-    }
+    g_window=SDL_CreateWindow("Retrovicios",SDL_WINDOWPOS_UNDEFINED,SDL_WINDOWPOS_UNDEFINED,WINDOW_W,WINDOW_H,0);
+    if(!g_window)g_window=SDL_CreateWindow("Retrovicios",SDL_WINDOWPOS_UNDEFINED,SDL_WINDOWPOS_UNDEFINED,720,480,0);
     if(!g_window){SDL_Quit();return 2;}
 
     g_renderer=SDL_CreateRenderer(g_window,-1,0);
     if(!g_renderer){SDL_DestroyWindow(g_window);SDL_Quit();return 3;}
     SDL_RenderSetLogicalSize(g_renderer,WINDOW_W,WINDOW_H);
 
-    g_texture=SDL_CreateTexture(g_renderer,SDL_PIXELFORMAT_RGB888,SDL_TEXTUREACCESS_STREAMING,
-                                WINDOW_W,WINDOW_H);
+    g_texture=SDL_CreateTexture(g_renderer,SDL_PIXELFORMAT_RGB888,SDL_TEXTUREACCESS_STREAMING,WINDOW_W,WINDOW_H);
     if(!g_texture){SDL_DestroyRenderer(g_renderer);SDL_DestroyWindow(g_window);SDL_Quit();return 4;}
 
     {
@@ -579,24 +547,20 @@ int main(int argc,char **argv)
                     if(view>=view_count())view=0;
                     game_sel=0;
                     rebuild_filter(catalog,state,view,indices,&filtered,&game_sel);
+                    g_selected_cover_game[0]='\0';
                 }else{
-                    grid_move(nav*GRID_COLS,filtered,&game_sel);
+                    list_move(nav,filtered,&game_sel);
                 }
             }
-            if(left){
-                if(focus==1){
-                    if(game_sel%GRID_COLS==0)focus=0;
-                    else grid_move(-1,filtered,&game_sel);
-                }
-            }
-            if(right){
-                if(focus==0)focus=1;
-                else if(filtered && game_sel%GRID_COLS<GRID_COLS-1)grid_move(1,filtered,&game_sel);
-            }
+
+            if(left && focus==1)focus=0;
+            if(right && focus==0)focus=1;
+
             if(back){
                 if(focus==1)focus=0;
                 else running=0;
             }
+
             if(confirm){
                 if(focus==0){
                     focus=1;
@@ -613,6 +577,7 @@ int main(int argc,char **argv)
                     }
                 }
             }
+
             if(favorite && focus==1 && filtered){
                 RHGame *g=&catalog->games[indices[game_sel]];
                 int added=rh_state_toggle_favorite(state,g->path);
@@ -620,6 +585,7 @@ int main(int argc,char **argv)
                 snprintf(status,sizeof(status),added>0?"AGREGADO A FAVORITOS":"QUITADO DE FAVORITOS");
                 rebuild_filter(catalog,state,view,indices,&filtered,&game_sel);
             }
+
             if(scan_req)rescan(catalog,state,view,indices,&filtered,&game_sel,status,sizeof(status));
             draw_ui(screen,catalog,state,view,focus,game_sel,indices,filtered,status);
         }
@@ -627,7 +593,7 @@ int main(int argc,char **argv)
     }
 
     rh_state_save(state,STATE_FILE);
-    free_cover_cache();
+    if(g_selected_cover)SDL_FreeSurface(g_selected_cover);
     if(joy)SDL_JoystickClose(joy);
     if(screen)SDL_FreeSurface(screen);
     if(g_texture)SDL_DestroyTexture(g_texture);
