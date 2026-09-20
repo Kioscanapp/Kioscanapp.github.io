@@ -15,7 +15,7 @@ SOURCES     := source
 INCLUDES    := include
 SDL2_CONFIG := $(PSL1GHT)/portlibs/ppu/bin/sdl2-config
 LIBDIRS     := -L$(PSL1GHT)/portlibs/ppu/lib
-LIBS        := $(shell $(SDL2_CONFIG) --libs) -lm
+LIBS        := $(shell $(SDL2_CONFIG) --libs) -lnet -lsysmodule -lnetctl -lsysfs -llv2 -lm
 CFLAGS      += -O2 -Wall -Wextra -std=gnu99 -D__PSL1GHT__ -D__PS3__ -mcpu=cell $(LIBPSL1GHT_INC) -I$(INCLUDES) -I$(PSL1GHT)/portlibs/ppu/include/SDL2 -D_REENTRANT
 LDFLAGS     += -mcpu=cell $(LIBDIRS)
 
