@@ -114,8 +114,8 @@ jobs:
           screenshot_directory = "/dev_hdd0/game/RVIC00001/USRDIR/screenshots"
           EOF
 
-          echo "Retrovicios PS3 v1.5 - soporte ZIP y 7Z" > retrohub/pkgfiles/USRDIR/data/README.TXT
-          echo "Usa tus copias legales en /RETROVICIOS/roms/<sistema>/ del USB." > retrohub/pkgfiles/USRDIR/roms/README.TXT
+          echo "Retrovicios PS3 v1.6 - autodeteccion de ROMs mezcladas" > retrohub/pkgfiles/USRDIR/data/README.TXT
+          echo "Copia ROMs sueltas en /RETROVICIOS/roms/ o usa las carpetas por sistema." > retrohub/pkgfiles/USRDIR/roms/README.TXT
           test "$(find retrohub/pkgfiles/USRDIR/cores -maxdepth 1 -name '*.SELF' | wc -l)" -ge 24
 
       - name: Build Retrovicios fixed PKG
@@ -124,12 +124,12 @@ jobs:
           "$PS3DEV/portlibs/ppu/bin/sdl2-config" --version
           cd retrohub
           make -f Makefile.ps3 clean all
-          cp retrovicios_ps3.pkg "$GITHUB_WORKSPACE/Retrovicios_PS3_v1.5_Comprimidos.pkg"
-          ls -lh "$GITHUB_WORKSPACE/Retrovicios_PS3_v1.5_Comprimidos.pkg"
+          cp retrovicios_ps3.pkg "$GITHUB_WORKSPACE/Retrovicios_PS3_v1.6_AutoROM.pkg"
+          ls -lh "$GITHUB_WORKSPACE/Retrovicios_PS3_v1.6_AutoROM.pkg"
 
       - name: Upload final package
         uses: actions/upload-artifact@v4
         with:
-          name: Retrovicios_PS3_v1.5_Comprimidos
-          path: Retrovicios_PS3_v1.5_Comprimidos.pkg
+          name: Retrovicios_PS3_v1.6_AutoROM
+          path: Retrovicios_PS3_v1.6_AutoROM.pkg
           if-no-files-found: error
