@@ -42,6 +42,11 @@ static SDL_Window *g_window = NULL;
 static SDL_Renderer *g_renderer = NULL;
 static SDL_Texture *g_texture = NULL;
 
+/* Keep the large catalog off the PS3 process stack. */
+static RHCatalog g_catalog;
+static RHState g_state;
+static int g_indices[RH_MAX_FILTERED];
+
 static void boot_log(const char *message)
 {
     FILE *f=fopen(INSTALL_ROOT "/data/boot.log","a");
@@ -333,12 +338,13 @@ static void grid_move(int delta,const size_t filtered,int *game_sel)
 int main(int argc,char **argv)
 {
     SDL_Surface *screen; SDL_Event ev; SDL_Joystick *joy=0;
-    RHCatalog catalog; RHState state; int indices[RH_MAX_FILTERED]; size_t filtered=0;
+    RHCatalog *catalog=&g_catalog; RHState *state=&g_state; int *indices=g_indices; size_t filtered=0;
     int view=0,focus=0,game_sel=0,running=1; Uint32 last_axis=0;
     char status[96]="";
     (void)argc;(void)argv;
 
-    boot_log("Retrovicios v1.1 boot");
+    boot_log("Retrovicios v1.2 boot");
+    SDL_SetMainReady();
     if(SDL_Init(SDL_INIT_VIDEO)<0){boot_log("SDL video init failed");return 1;}
     boot_log("SDL2 video init OK");
 
@@ -376,9 +382,9 @@ int main(int argc,char **argv)
     }
     boot_log("Input init complete");
 
-    rh_state_load(&state,STATE_FILE);
-    rescan(&catalog,&state,view,indices,&filtered,&game_sel,status,sizeof(status));
-    draw_ui(screen,&catalog,&state,view,focus,game_sel,indices,filtered,status);
+    rh_state_load(state,STATE_FILE);
+    rescan(catalog,state,view,indices,&filtered,&game_sel,status,sizeof(status));
+    draw_ui(screen,catalog,state,view,focus,game_sel,indices,filtered,status);
 
     while(running){
         while(SDL_PollEvent(&ev)){
@@ -409,7 +415,7 @@ int main(int argc,char **argv)
             if(nav){
                 if(focus==0){
                     view+=nav;if(view<0)view=view_count()-1;if(view>=view_count())view=0;
-                    game_sel=0;rebuild_filter(&catalog,&state,view,indices,&filtered,&game_sel);
+                    game_sel=0;rebuild_filter(catalog,state,view,indices,&filtered,&game_sel);
                 } else {
                     grid_move(nav*GRID_COLS,filtered,&game_sel);
                 }
@@ -428,30 +434,30 @@ int main(int argc,char **argv)
             if(confirm){
                 if(focus==0){focus=1;}
                 else if(filtered){
-                    RHGame *g=&catalog.games[indices[game_sel]];
+                    RHGame *g=&catalog->games[indices[game_sel]];
                     if(!rh_core_available_ps3(g->system_index)){
                         snprintf(status,sizeof(status),"FALTA CORE: %.70s",rh_system_core(g->system_index));
                     } else {
-                        rh_state_touch_recent(&state,g->path); rh_state_save(&state,STATE_FILE);
+                        rh_state_touch_recent(state,g->path); rh_state_save(state,STATE_FILE);
                         snprintf(status,sizeof(status),"ABRIENDO %.65s",g->name);
-                        draw_ui(screen,&catalog,&state,view,focus,game_sel,indices,filtered,status);
+                        draw_ui(screen,catalog,state,view,focus,game_sel,indices,filtered,status);
                         rh_launch_game_ps3(g);
                     }
                 }
             }
             if(favorite && focus==1 && filtered){
-                RHGame *g=&catalog.games[indices[game_sel]];
-                int added=rh_state_toggle_favorite(&state,g->path);
-                rh_state_save(&state,STATE_FILE);
+                RHGame *g=&catalog->games[indices[game_sel]];
+                int added=rh_state_toggle_favorite(state,g->path);
+                rh_state_save(state,STATE_FILE);
                 snprintf(status,sizeof(status),added>0?"AGREGADO A FAVORITOS":"QUITADO DE FAVORITOS");
-                rebuild_filter(&catalog,&state,view,indices,&filtered,&game_sel);
+                rebuild_filter(catalog,state,view,indices,&filtered,&game_sel);
             }
-            if(scan_req)rescan(&catalog,&state,view,indices,&filtered,&game_sel,status,sizeof(status));
-            draw_ui(screen,&catalog,&state,view,focus,game_sel,indices,filtered,status);
+            if(scan_req)rescan(catalog,state,view,indices,&filtered,&game_sel,status,sizeof(status));
+            draw_ui(screen,catalog,state,view,focus,game_sel,indices,filtered,status);
         }
         SDL_Delay(8);
     }
-    rh_state_save(&state,STATE_FILE);
+    rh_state_save(state,STATE_FILE);
     if(joy)SDL_JoystickClose(joy);
     if(screen)SDL_FreeSurface(screen);
     if(g_texture)SDL_DestroyTexture(g_texture);
