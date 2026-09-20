@@ -19,16 +19,17 @@
 #define GRID_ROWS 3
 #define GRID_PAGE (GRID_COLS * GRID_ROWS)
 
-#define PAD_SELECT 0
-#define PAD_START 3
-#define PAD_UP 4
-#define PAD_RIGHT 5
-#define PAD_DOWN 6
-#define PAD_LEFT 7
-#define PAD_TRIANGLE 12
-#define PAD_CIRCLE 13
-#define PAD_CROSS 14
-#define PAD_SQUARE 15
+/* SDL2_PSL1GHT button order from its PS3 joystick driver. */
+#define PAD_LEFT 0
+#define PAD_DOWN 1
+#define PAD_RIGHT 2
+#define PAD_UP 3
+#define PAD_START 4
+#define PAD_SELECT 7
+#define PAD_SQUARE 8
+#define PAD_CROSS 9
+#define PAD_CIRCLE 10
+#define PAD_TRIANGLE 11
 
 extern void rh_draw_text(SDL_Surface*,int,int,const char*,int,Uint32,int);
 
@@ -343,7 +344,7 @@ int main(int argc,char **argv)
     char status[96]="";
     (void)argc;(void)argv;
 
-    boot_log("Retrovicios v1.2 boot");
+    boot_log("Retrovicios v1.3 boot");
     SDL_SetMainReady();
     if(SDL_Init(SDL_INIT_VIDEO)<0){boot_log("SDL video init failed");return 1;}
     boot_log("SDL2 video init OK");

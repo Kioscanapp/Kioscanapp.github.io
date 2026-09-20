@@ -114,7 +114,7 @@ jobs:
           screenshot_directory = "/dev_hdd0/game/RVIC00001/USRDIR/screenshots"
           EOF
 
-          echo "Retrovicios PS3 v1.1 - SDL2 startup fix" > retrohub/pkgfiles/USRDIR/data/README.TXT
+          echo "Retrovicios PS3 v1.3 - controles PS3 corregidos" > retrohub/pkgfiles/USRDIR/data/README.TXT
           echo "Usa tus copias legales en /RETROVICIOS/roms/<sistema>/ del USB." > retrohub/pkgfiles/USRDIR/roms/README.TXT
           test "$(find retrohub/pkgfiles/USRDIR/cores -maxdepth 1 -name '*.SELF' | wc -l)" -eq 15
 
@@ -124,12 +124,12 @@ jobs:
           "$PS3DEV/portlibs/ppu/bin/sdl2-config" --version
           cd retrohub
           make -f Makefile.ps3 clean all
-          cp retrovicios_ps3.pkg "$GITHUB_WORKSPACE/Retrovicios_PS3_v1.1_Fix.pkg"
-          ls -lh "$GITHUB_WORKSPACE/Retrovicios_PS3_v1.1_Fix.pkg"
+          cp retrovicios_ps3.pkg "$GITHUB_WORKSPACE/Retrovicios_PS3_v1.3_Controles.pkg"
+          ls -lh "$GITHUB_WORKSPACE/Retrovicios_PS3_v1.3_Controles.pkg"
 
       - name: Upload final package
         uses: actions/upload-artifact@v4
         with:
-          name: Retrovicios_PS3_v1.1_Fix
-          path: Retrovicios_PS3_v1.1_Fix.pkg
+          name: Retrovicios_PS3_v1.3_Controles
+          path: Retrovicios_PS3_v1.3_Controles.pkg
           if-no-files-found: error
