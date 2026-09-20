@@ -99,9 +99,9 @@ static const char *system_short_name(int system_index)
     static const char *shorts[] = {
         "NES","SNES","SMS","GAME GEAR","GENESIS","SEGA CD","GB/GBC","GBA",
         "ATARI 2600","ATARI 7800","LYNX","PC ENGINE","NG POCKET","WONDERSWAN",
-        "VIRTUAL BOY","VECTREX","MSX","ARCADE","SG-1000","32X","ATARI 5200",
+        "VIRTUAL BOY","VECTREX","MSX","ARCADE","SG-1000","ATARI 5200",
         "COLECO","INTELLIVISION","ODYSSEY2","CHANNEL F","GAME&WATCH","POKEMON MINI",
-        "SUPERGRAFX","NEO GEO","NEO GEO CD","GX4000"
+        "SUPERGRAFX","GX4000"
     };
     if(system_index < 0 || system_index >= (int)(sizeof(shorts)/sizeof(shorts[0]))) return "RETRO";
     return shorts[system_index];
