@@ -86,6 +86,7 @@ jobs:
           mkdir -p retrohub/pkgfiles/USRDIR/savestates
           mkdir -p retrohub/pkgfiles/USRDIR/screenshots
           mkdir -p retrohub/pkgfiles/USRDIR/config
+          mkdir -p retrohub/pkgfiles/USRDIR/covers
           mkdir -p retrohub/assets
 
           python3 - <<'PY'
@@ -112,10 +113,13 @@ jobs:
           savefile_directory = "/dev_hdd0/game/RVIC00001/USRDIR/savefiles"
           savestate_directory = "/dev_hdd0/game/RVIC00001/USRDIR/savestates"
           screenshot_directory = "/dev_hdd0/game/RVIC00001/USRDIR/screenshots"
+          input_quit_gamepad_combo = "4"
           EOF
 
-          echo "Retrovicios PS3 v1.6 - autodeteccion de ROMs mezcladas" > retrohub/pkgfiles/USRDIR/data/README.TXT
+          echo "Retrovicios PS3 v1.7 - interfaz moderna, caratulas, Sega CD y retorno rapido" > retrohub/pkgfiles/USRDIR/data/README.TXT
           echo "Copia ROMs sueltas en /RETROVICIOS/roms/ o usa las carpetas por sistema." > retrohub/pkgfiles/USRDIR/roms/README.TXT
+          echo "Caratulas JPG/PNG/BMP: /RETROVICIOS/covers/<sistema>/<mismo nombre de ROM>.jpg" >> retrohub/pkgfiles/USRDIR/roms/README.TXT
+          echo "SELECT + START durante el juego vuelve a Retrovicios." >> retrohub/pkgfiles/USRDIR/roms/README.TXT
           test "$(find retrohub/pkgfiles/USRDIR/cores -maxdepth 1 -name '*.SELF' | wc -l)" -ge 24
 
       - name: Build Retrovicios fixed PKG
@@ -124,12 +128,12 @@ jobs:
           "$PS3DEV/portlibs/ppu/bin/sdl2-config" --version
           cd retrohub
           make -f Makefile.ps3 clean all
-          cp retrovicios_ps3.pkg "$GITHUB_WORKSPACE/Retrovicios_PS3_v1.6_AutoROM.pkg"
-          ls -lh "$GITHUB_WORKSPACE/Retrovicios_PS3_v1.6_AutoROM.pkg"
+          cp retrovicios_ps3.pkg "$GITHUB_WORKSPACE/Retrovicios_PS3_v1.7_Moderno.pkg"
+          ls -lh "$GITHUB_WORKSPACE/Retrovicios_PS3_v1.7_Moderno.pkg"
 
       - name: Upload final package
         uses: actions/upload-artifact@v4
         with:
-          name: Retrovicios_PS3_v1.6_AutoROM
-          path: Retrovicios_PS3_v1.6_AutoROM.pkg
+          name: Retrovicios_PS3_v1.7_Moderno
+          path: Retrovicios_PS3_v1.7_Moderno.pkg
           if-no-files-found: error
