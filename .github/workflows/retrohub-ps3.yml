@@ -114,15 +114,17 @@ jobs:
           savestate_directory = "/dev_hdd0/game/RVIC00001/USRDIR/savestates"
           screenshot_directory = "/dev_hdd0/game/RVIC00001/USRDIR/screenshots"
           input_menu_toggle_gamepad_combo = "0"
+          input_hotkey_block_delay = "0"
           input_quit_gamepad_combo = "4"
           EOF
 
-          echo "Retrovicios PS3 v2.2 - Sega CD sin falsos avisos, buscador, letras grandes y XMB" > retrohub/pkgfiles/USRDIR/data/README.TXT
+          echo "Retrovicios PS3 v2.3 - salida mas rapida, salto de 10 y buscador mejorado" > retrohub/pkgfiles/USRDIR/data/README.TXT
           echo "Copia ROMs sueltas en /RETROVICIOS/roms/ o usa las carpetas por sistema." > retrohub/pkgfiles/USRDIR/roms/README.TXT
           echo "Caratulas JPG/PNG/BMP: /RETROVICIOS/covers/<sistema>/<mismo nombre de ROM>.jpg" >> retrohub/pkgfiles/USRDIR/roms/README.TXT
           echo "SELECT + START durante el juego cierra el core y vuelve directamente a Retrovicios." >> retrohub/pkgfiles/USRDIR/roms/README.TXT
           echo "En Retrovicios, SELECT sale directamente al menu XMB de PS3. El boton PS > Salir del juego tambien funciona." >> retrohub/pkgfiles/USRDIR/roms/README.TXT
           echo "L1 abre el buscador. Escribi parte del nombre; muestra la mejor coincidencia y juegos similares. L1/R1 cambia resultado; START lo abre." >> retrohub/pkgfiles/USRDIR/roms/README.TXT
+          echo "Flechas izquierda/derecha avanzan o retroceden 10 juegos. En el buscador, R2 lleva el resultado elegido a su listado." >> retrohub/pkgfiles/USRDIR/roms/README.TXT
           echo "Sega CD: coloca tus BIOS legales en /RETROVICIOS/system/ con nombres bios_CD_U.bin, bios_CD_E.bin, bios_CD_J.bin." >> retrohub/pkgfiles/USRDIR/roms/README.TXT
           echo "Sega CD: la region la decide Genesis Plus GX leyendo el juego; Retrovicios ya no bloquea por el nombre del archivo." >> retrohub/pkgfiles/USRDIR/roms/README.TXT
           test "$(find retrohub/pkgfiles/USRDIR/cores -maxdepth 1 -name '*.SELF' | wc -l)" -ge 24
@@ -133,12 +135,12 @@ jobs:
           "$PS3DEV/portlibs/ppu/bin/sdl2-config" --version
           cd retrohub
           make -f Makefile.ps3 clean all
-          cp retrovicios_ps3.pkg "$GITHUB_WORKSPACE/Retrovicios_PS3_v2.2_SegaCDFix.pkg"
-          ls -lh "$GITHUB_WORKSPACE/Retrovicios_PS3_v2.2_SegaCDFix.pkg"
+          cp retrovicios_ps3.pkg "$GITHUB_WORKSPACE/Retrovicios_PS3_v2.3_Navegacion.pkg"
+          ls -lh "$GITHUB_WORKSPACE/Retrovicios_PS3_v2.3_Navegacion.pkg"
 
       - name: Upload final package
         uses: actions/upload-artifact@v4
         with:
-          name: Retrovicios_PS3_v2.2_SegaCDFix
-          path: Retrovicios_PS3_v2.2_SegaCDFix.pkg
+          name: Retrovicios_PS3_v2.3_Navegacion
+          path: Retrovicios_PS3_v2.3_Navegacion.pkg
           if-no-files-found: error
