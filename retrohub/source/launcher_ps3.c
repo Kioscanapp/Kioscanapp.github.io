@@ -66,6 +66,21 @@ static int rh_copy_file(const char *src,const char *dst)
     return 0;
 }
 
+static int rh_extension_is(const char *path,const char *ext)
+{
+    const char *dot=strrchr(path,'.');
+    size_t i;
+    if(!dot || !dot[1] || !ext)return 0;
+    ++dot;
+    for(i=0;dot[i] && ext[i];++i){
+        char a=dot[i],b=ext[i];
+        if(a>='A'&&a<='Z')a=(char)(a-'A'+'a');
+        if(b>='A'&&b<='Z')b=(char)(b-'A'+'a');
+        if(a!=b)return 0;
+    }
+    return dot[i]=='\0' && ext[i]=='\0';
+}
+
 static void rh_write_runtime_config(void)
 {
     FILE *f=fopen(RH_CONFIG_PATH,"w");
@@ -135,9 +150,13 @@ int rh_launch_game_ps3(const RHGame *game)
 
     if(game->system_index>=0 &&
        strcmp(rh_systems[game->system_index].id,"segacd")==0){
-        /* Import any user-supplied regional BIOS, but do not guess the
-           disc region from the filename. Genesis Plus GX inspects the
-           actual content and decides which BIOS it needs. */
+        /* Sega CD must be launched as a disc image, not a compressed
+           archive or a raw track BIN. */
+        if(!(rh_extension_is(game->path,"cue") ||
+             rh_extension_is(game->path,"chd") ||
+             rh_extension_is(game->path,"iso")))
+            return -60;
+
         rh_import_sega_cd_bios();
     }
 
