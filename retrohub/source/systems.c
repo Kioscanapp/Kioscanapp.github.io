@@ -11,7 +11,7 @@ const RHSystem rh_systems[] = {
     {"sms",      "Master System",         "roms/sms",      "sms|zip|7z",                    "cores/genesis_plus_gx_libretro_psl1ght.SELF"},
     {"gamegear", "Sega Game Gear",        "roms/gamegear", "gg|zip|7z",                     "cores/genesis_plus_gx_libretro_psl1ght.SELF"},
     {"genesis",  "Sega Mega Drive",       "roms/genesis",  "md|gen|smd|bin|zip|7z",         "cores/genesis_plus_gx_libretro_psl1ght.SELF"},
-    {"segacd",   "Sega CD",               "roms/segacd",   "cue|chd|iso|zip|7z",             "cores/genesis_plus_gx_libretro_psl1ght.SELF"},
+    {"segacd",   "Sega CD",               "roms/segacd",   "cue|chd|iso",                    "cores/genesis_plus_gx_libretro_psl1ght.SELF"},
     {"gb",       "Game Boy / Color",      "roms/gb",       "gb|gbc|zip|7z",                  "cores/gambatte_libretro_psl1ght.SELF"},
     {"gba",      "Game Boy Advance",      "roms/gba",      "gba|zip|7z",                     "cores/vba_next_libretro_psl1ght.SELF"},
     {"atari2600","Atari 2600",            "roms/atari2600","a26|bin|zip|7z",                 "cores/stella2014_libretro_psl1ght.SELF"},
