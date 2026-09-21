@@ -680,7 +680,7 @@ int main(int argc,char **argv)
     char status[96]="";
     (void)argc;(void)argv;
 
-    boot_log("Retrovicios v2.3 boot");
+    boot_log("Retrovicios v2.4 boot");
     SDL_SetMainReady();
     if(SDL_Init(SDL_INIT_VIDEO)<0){boot_log("SDL video init failed");return 1;}
     sysUtilRegisterCallback(SYSUTIL_EVENT_SLOT0,rh_sysutil_callback,NULL);
@@ -815,7 +815,8 @@ int main(int argc,char **argv)
                         rh_state_save(state,STATE_FILE);
                         {
                             int launch_rc=rh_launch_game_ps3(g);
-                            if(launch_rc<0) snprintf(status,sizeof(status),"NO SE PUDO ABRIR (%d)",launch_rc);
+                            if(launch_rc==-60) snprintf(status,sizeof(status),"SEGA CD: USA CUE/CHD/ISO, NO ZIP/7Z/BIN");
+                            else if(launch_rc<0) snprintf(status,sizeof(status),"NO SE PUDO ABRIR (%d)",launch_rc);
                         }
                     }
                 }
@@ -889,7 +890,8 @@ int main(int argc,char **argv)
                         draw_ui(screen,catalog,state,view,focus,game_sel,indices,filtered,status);
                         {
                             int launch_rc=rh_launch_game_ps3(g);
-                            if(launch_rc<0) snprintf(status,sizeof(status),"NO SE PUDO ABRIR EL JUEGO (%d)",launch_rc);
+                            if(launch_rc==-60) snprintf(status,sizeof(status),"SEGA CD: USA CUE/CHD/ISO, NO ZIP/7Z/BIN");
+                            else if(launch_rc<0) snprintf(status,sizeof(status),"NO SE PUDO ABRIR EL JUEGO (%d)",launch_rc);
                         }
                     }
                 }
