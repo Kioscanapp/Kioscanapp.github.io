@@ -44,6 +44,7 @@
 #define PAD_TRIANGLE 11
 #define PAD_R1 12
 #define PAD_L1 13
+#define PAD_R2 14
 
 extern void rh_draw_text(SDL_Surface*,int,int,const char*,int,Uint32,int);
 
@@ -341,10 +342,10 @@ static void draw_search(SDL_Surface *screen,const RHCatalog *cat)
     rh_draw_text(screen,834,492,"X  ESCRIBIR",2,white,0);
     rh_draw_text(screen,834,526,"CUADRADO  BORRAR",2,white,0);
     rh_draw_text(screen,834,560,"TRIANGULO  LIMPIAR",2,white,0);
-    rh_draw_text(screen,834,594,"START  JUGAR SELECCION",2,blue,0);
+    rh_draw_text(screen,834,594,"START JUGAR   R2 VER EN LISTA",2,blue,0);
 
     fill_rect(screen,34,650,1212,48,SDL_MapRGB(screen->format,7,16,28));
-    rh_draw_text(screen,52,665,"L1 ANTERIOR   R1 SIGUIENTE   O CERRAR BUSCADOR",2,white,0);
+    rh_draw_text(screen,52,665,"L1/R1 RESULTADO   R2 VER EN LISTA   O CERRAR",2,white,0);
 
     present_screen(screen);
 }
@@ -679,7 +680,7 @@ int main(int argc,char **argv)
     char status[96]="";
     (void)argc;(void)argv;
 
-    boot_log("Retrovicios v2.2 boot");
+    boot_log("Retrovicios v2.3 boot");
     SDL_SetMainReady();
     if(SDL_Init(SDL_INIT_VIDEO)<0){boot_log("SDL video init failed");return 1;}
     sysUtilRegisterCallback(SYSUTIL_EVENT_SLOT0,rh_sysutil_callback,NULL);
@@ -717,7 +718,7 @@ int main(int argc,char **argv)
         if(g_xmb_exit_requested){running=0;break;}
         while(SDL_PollEvent(&ev)){
             int nav=0,confirm=0,back=0,favorite=0,scan_req=0,left=0,right=0;
-            int search_open=0,search_prev=0,search_next=0;
+            int search_open=0,search_prev=0,search_next=0,search_launch=0,search_to_list=0;
             if(ev.type==SDL_QUIT)running=0;
             else if(ev.type==SDL_KEYDOWN){
                 if(ev.key.keysym.sym==SDLK_UP)nav=-1;
@@ -740,8 +741,9 @@ int main(int argc,char **argv)
                 else if(ev.jbutton.button==PAD_TRIANGLE)scan_req=1;
                 else if(ev.jbutton.button==PAD_L1){if(search_mode)search_prev=1;else search_open=1;}
                 else if(ev.jbutton.button==PAD_R1){if(search_mode)search_next=1;}
+                else if(ev.jbutton.button==PAD_R2){if(search_mode)search_to_list=1;}
                 else if(ev.jbutton.button==PAD_SELECT){if(!search_mode){g_xmb_exit_requested=1;running=0;}}
-                else if(ev.jbutton.button==PAD_START && filtered)confirm=1;
+                else if(ev.jbutton.button==PAD_START){if(search_mode)search_launch=1;else if(filtered)confirm=1;}
             }else if(ev.type==SDL_JOYAXISMOTION && SDL_GetTicks()-last_axis>180){
                 if(ev.jaxis.axis==1){
                     if(ev.jaxis.value<-18000){nav=-1;last_axis=SDL_GetTicks();}
@@ -804,7 +806,7 @@ int main(int argc,char **argv)
                 if(scan_req)rh_search_clear(catalog);
                 if(confirm)rh_search_add_char(g_search_keys[g_search_key],catalog);
 
-                if(ev.type==SDL_JOYBUTTONDOWN && ev.jbutton.button==PAD_START && g_search_count){
+                if(search_launch && g_search_count){
                     RHGame *g=&catalog->games[g_search_results[g_search_sel]];
                     if(!rh_core_available_ps3(g->system_index)){
                         snprintf(status,sizeof(status),"FALTA CORE: %.70s",rh_system_core(g->system_index));
@@ -816,6 +818,28 @@ int main(int argc,char **argv)
                             if(launch_rc<0) snprintf(status,sizeof(status),"NO SE PUDO ABRIR (%d)",launch_rc);
                         }
                     }
+                }
+
+                if(search_to_list && g_search_count){
+                    int target=g_search_results[g_search_sel];
+                    RHGame *chosen=&catalog->games[target];
+                    size_t k;
+
+                    view=3+chosen->system_index;
+                    game_sel=0;
+                    rebuild_filter(catalog,state,view,indices,&filtered,&game_sel);
+                    for(k=0;k<filtered;++k){
+                        if(indices[k]==target){
+                            game_sel=(int)k;
+                            break;
+                        }
+                    }
+                    focus=1;
+                    search_mode=0;
+                    status[0]='\0';
+                    g_selected_cover_game[0]='\0';
+                    draw_ui(screen,catalog,state,view,focus,game_sel,indices,filtered,status);
+                    continue;
                 }
 
                 draw_search(screen,catalog);
@@ -836,8 +860,15 @@ int main(int argc,char **argv)
                 }
             }
 
-            if(left && focus==1){status[0]='\0';focus=0;}
-            if(right && focus==0){status[0]='\0';focus=1;}
+            if(left){
+                status[0]='\0';
+                if(focus==1)list_move(-10,filtered,&game_sel);
+            }
+            if(right){
+                status[0]='\0';
+                if(focus==0)focus=1;
+                else list_move(10,filtered,&game_sel);
+            }
 
             if(back){
                 if(focus==1)focus=0;
