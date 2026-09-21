@@ -118,7 +118,7 @@ jobs:
           input_quit_gamepad_combo = "4"
           EOF
 
-          echo "Retrovicios PS3 v2.3 - salida mas rapida, salto de 10 y buscador mejorado" > retrohub/pkgfiles/USRDIR/data/README.TXT
+          echo "Retrovicios PS3 v2.4 - Sega CD solo CUE CHD ISO y navegacion mejorada" > retrohub/pkgfiles/USRDIR/data/README.TXT
           echo "Copia ROMs sueltas en /RETROVICIOS/roms/ o usa las carpetas por sistema." > retrohub/pkgfiles/USRDIR/roms/README.TXT
           echo "Caratulas JPG/PNG/BMP: /RETROVICIOS/covers/<sistema>/<mismo nombre de ROM>.jpg" >> retrohub/pkgfiles/USRDIR/roms/README.TXT
           echo "SELECT + START durante el juego cierra el core y vuelve directamente a Retrovicios." >> retrohub/pkgfiles/USRDIR/roms/README.TXT
@@ -127,6 +127,7 @@ jobs:
           echo "Flechas izquierda/derecha avanzan o retroceden 10 juegos. En el buscador, R2 lleva el resultado elegido a su listado." >> retrohub/pkgfiles/USRDIR/roms/README.TXT
           echo "Sega CD: coloca tus BIOS legales en /RETROVICIOS/system/ con nombres bios_CD_U.bin, bios_CD_E.bin, bios_CD_J.bin." >> retrohub/pkgfiles/USRDIR/roms/README.TXT
           echo "Sega CD: la region la decide Genesis Plus GX leyendo el juego; Retrovicios ya no bloquea por el nombre del archivo." >> retrohub/pkgfiles/USRDIR/roms/README.TXT
+          echo "Sega CD: no uses ZIP/7Z. Usa CUE+BIN, CHD o ISO; Retrovicios muestra solo CUE/CHD/ISO." >> retrohub/pkgfiles/USRDIR/roms/README.TXT
           test "$(find retrohub/pkgfiles/USRDIR/cores -maxdepth 1 -name '*.SELF' | wc -l)" -ge 24
 
       - name: Build Retrovicios fixed PKG
@@ -135,12 +136,12 @@ jobs:
           "$PS3DEV/portlibs/ppu/bin/sdl2-config" --version
           cd retrohub
           make -f Makefile.ps3 clean all
-          cp retrovicios_ps3.pkg "$GITHUB_WORKSPACE/Retrovicios_PS3_v2.3_Navegacion.pkg"
-          ls -lh "$GITHUB_WORKSPACE/Retrovicios_PS3_v2.3_Navegacion.pkg"
+          cp retrovicios_ps3.pkg "$GITHUB_WORKSPACE/Retrovicios_PS3_v2.4_SegaCDDiscFix.pkg"
+          ls -lh "$GITHUB_WORKSPACE/Retrovicios_PS3_v2.4_SegaCDDiscFix.pkg"
 
       - name: Upload final package
         uses: actions/upload-artifact@v4
         with:
-          name: Retrovicios_PS3_v2.3_Navegacion
-          path: Retrovicios_PS3_v2.3_Navegacion.pkg
+          name: Retrovicios_PS3_v2.4_SegaCDDiscFix
+          path: Retrovicios_PS3_v2.4_SegaCDDiscFix.pkg
           if-no-files-found: error
