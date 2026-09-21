@@ -109,48 +109,6 @@ static void rh_import_sega_cd_bios(void)
     rh_import_one_bios("bios_CD_J.bin");
 }
 
-static int rh_has_text_nocase(const char *s,const char *needle)
-{
-    size_t i,j,n;
-    if(!s || !needle)return 0;
-    n=strlen(needle);
-    if(!n)return 1;
-    for(i=0;s[i];++i){
-        for(j=0;j<n && s[i+j];++j){
-            char a=s[i+j],b=needle[j];
-            if(a>='A'&&a<='Z')a=(char)(a-'A'+'a');
-            if(b>='A'&&b<='Z')b=(char)(b-'A'+'a');
-            if(a!=b)break;
-        }
-        if(j==n)return 1;
-    }
-    return 0;
-}
-
-static int rh_check_sega_cd_bios(const RHGame *game)
-{
-    char path[RH_PATH_MAX];
-    int has_u,has_e,has_j;
-
-    rh_import_sega_cd_bios();
-
-    snprintf(path,sizeof(path),"%s/bios_CD_U.bin",RH_SYSTEM_DIR);
-    has_u=rh_file_exists(path) && rh_file_size(path)==RH_SEGA_CD_BIOS_SIZE;
-    snprintf(path,sizeof(path),"%s/bios_CD_E.bin",RH_SYSTEM_DIR);
-    has_e=rh_file_exists(path) && rh_file_size(path)==RH_SEGA_CD_BIOS_SIZE;
-    snprintf(path,sizeof(path),"%s/bios_CD_J.bin",RH_SYSTEM_DIR);
-    has_j=rh_file_exists(path) && rh_file_size(path)==RH_SEGA_CD_BIOS_SIZE;
-
-    if(rh_has_text_nocase(game->name,"(USA") || rh_has_text_nocase(game->name,"(U)"))
-        return has_u ? 0 : -51;
-    if(rh_has_text_nocase(game->name,"(Europe") || rh_has_text_nocase(game->name,"(E)"))
-        return has_e ? 0 : -52;
-    if(rh_has_text_nocase(game->name,"(Japan") || rh_has_text_nocase(game->name,"(J)"))
-        return has_j ? 0 : -53;
-
-    return (has_u || has_e || has_j) ? 0 : -50;
-}
-
 int rh_core_available_ps3(int system_index)
 {
     char core[RH_PATH_MAX];
@@ -166,7 +124,6 @@ int rh_launch_game_ps3(const RHGame *game)
     char core[RH_PATH_MAX];
     const char *argv[2];
     const char *relative_core;
-    int bios_rc=0;
 
     if(!game)return -1;
     relative_core=rh_system_core(game->system_index);
@@ -177,8 +134,10 @@ int rh_launch_game_ps3(const RHGame *game)
 
     if(game->system_index>=0 &&
        strcmp(rh_systems[game->system_index].id,"segacd")==0){
-        bios_rc=rh_check_sega_cd_bios(game);
-        if(bios_rc<0)return bios_rc;
+        /* Import any user-supplied regional BIOS, but do not guess the
+           disc region from the filename. Genesis Plus GX inspects the
+           actual content and decides which BIOS it needs. */
+        rh_import_sega_cd_bios();
     }
 
     rh_write_runtime_config();
