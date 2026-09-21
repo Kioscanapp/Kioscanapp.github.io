@@ -78,6 +78,7 @@ static void rh_write_runtime_config(void)
     fprintf(f,"savestate_directory = \"%s/savestates\"\n",RH_INSTALL_ROOT);
     fprintf(f,"screenshot_directory = \"%s/screenshots\"\n",RH_INSTALL_ROOT);
     fprintf(f,"input_menu_toggle_gamepad_combo = \"0\"\n");
+    fprintf(f,"input_hotkey_block_delay = \"0\"\n");
     fprintf(f,"input_quit_gamepad_combo = \"4\"\n");
     fclose(f);
 }
