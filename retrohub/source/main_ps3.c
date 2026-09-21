@@ -7,6 +7,7 @@
 
 #ifdef __PSL1GHT__
 #include <SDL.h>
+#include <sysutil/sysutil.h>
 #else
 #error "main_ps3.c is intended for PSL1GHT/PS3 builds"
 #endif
@@ -57,6 +58,14 @@ static int g_indices[RH_MAX_FILTERED];
 /* Only one cover is kept in memory. This avoids the slowdown of v1.7. */
 static SDL_Surface *g_selected_cover = NULL;
 static char g_selected_cover_game[RH_PATH_MAX];
+static volatile int g_xmb_exit_requested=0;
+
+static void rh_sysutil_callback(u64 status,u64 param,void *userdata)
+{
+    (void)param;
+    (void)userdata;
+    if(status==SYSUTIL_EXIT_GAME)g_xmb_exit_requested=1;
+}
 
 static void boot_log(const char *message)
 {
@@ -436,8 +445,9 @@ static void draw_ui(SDL_Surface *screen,const RHCatalog *cat,const RHState *st,i
     rh_draw_text(screen,134,672,"O VOLVER",1,white,0);
     rh_draw_text(screen,248,672,"CUADRADO FAVORITO",1,white,0);
     rh_draw_text(screen,438,672,"TRIANGULO REESCANEAR",1,white,0);
-    if(status && status[0])rh_draw_text(screen,730,672,status,1,blue,65);
-    else rh_draw_text(screen,730,672,"RETROVICIOS v1.9",1,muted,0);
+    rh_draw_text(screen,620,672,"SELECT SALIR A PS3",1,white,0);
+    if(status && status[0])rh_draw_text(screen,820,672,status,1,blue,54);
+    else rh_draw_text(screen,1080,672,"v2.0",1,muted,0);
 
     present_screen(screen);
 }
@@ -475,9 +485,10 @@ int main(int argc,char **argv)
     char status[96]="";
     (void)argc;(void)argv;
 
-    boot_log("Retrovicios v1.9 boot");
+    boot_log("Retrovicios v2.0 boot");
     SDL_SetMainReady();
     if(SDL_Init(SDL_INIT_VIDEO)<0){boot_log("SDL video init failed");return 1;}
+    sysUtilRegisterCallback(SYSUTIL_EVENT_SLOT0,rh_sysutil_callback,NULL);
 
     g_window=SDL_CreateWindow("Retrovicios",SDL_WINDOWPOS_UNDEFINED,SDL_WINDOWPOS_UNDEFINED,WINDOW_W,WINDOW_H,0);
     if(!g_window)g_window=SDL_CreateWindow("Retrovicios",SDL_WINDOWPOS_UNDEFINED,SDL_WINDOWPOS_UNDEFINED,720,480,0);
@@ -508,6 +519,8 @@ int main(int argc,char **argv)
     draw_ui(screen,catalog,state,view,focus,game_sel,indices,filtered,status);
 
     while(running){
+        sysUtilCheckCallback();
+        if(g_xmb_exit_requested){running=0;break;}
         while(SDL_PollEvent(&ev)){
             int nav=0,confirm=0,back=0,favorite=0,scan_req=0,left=0,right=0;
             if(ev.type==SDL_QUIT)running=0;
@@ -529,6 +542,7 @@ int main(int argc,char **argv)
                 else if(ev.jbutton.button==PAD_CIRCLE)back=1;
                 else if(ev.jbutton.button==PAD_SQUARE)favorite=1;
                 else if(ev.jbutton.button==PAD_TRIANGLE)scan_req=1;
+                else if(ev.jbutton.button==PAD_SELECT){g_xmb_exit_requested=1;running=0;}
                 else if(ev.jbutton.button==PAD_START && filtered)confirm=1;
             }else if(ev.type==SDL_JOYAXISMOTION && SDL_GetTicks()-last_axis>180){
                 if(ev.jaxis.axis==1){
@@ -600,6 +614,7 @@ int main(int argc,char **argv)
     }
 
     rh_state_save(state,STATE_FILE);
+    sysUtilUnregisterCallback(SYSUTIL_EVENT_SLOT0);
     if(g_selected_cover)SDL_FreeSurface(g_selected_cover);
     if(joy)SDL_JoystickClose(joy);
     if(screen)SDL_FreeSurface(screen);
