@@ -117,10 +117,11 @@ jobs:
           input_quit_gamepad_combo = "4"
           EOF
 
-          echo "Retrovicios PS3 v1.9 - Sega CD con deteccion e importacion de BIOS" > retrohub/pkgfiles/USRDIR/data/README.TXT
+          echo "Retrovicios PS3 v2.0 - salida correcta al XMB y Sega CD con BIOS" > retrohub/pkgfiles/USRDIR/data/README.TXT
           echo "Copia ROMs sueltas en /RETROVICIOS/roms/ o usa las carpetas por sistema." > retrohub/pkgfiles/USRDIR/roms/README.TXT
           echo "Caratulas JPG/PNG/BMP: /RETROVICIOS/covers/<sistema>/<mismo nombre de ROM>.jpg" >> retrohub/pkgfiles/USRDIR/roms/README.TXT
           echo "SELECT + START durante el juego cierra el core y vuelve directamente a Retrovicios." >> retrohub/pkgfiles/USRDIR/roms/README.TXT
+          echo "En Retrovicios, SELECT sale directamente al menu XMB de PS3. El boton PS > Salir del juego tambien funciona." >> retrohub/pkgfiles/USRDIR/roms/README.TXT
           echo "Sega CD: coloca tus BIOS legales en /RETROVICIOS/system/ con nombres bios_CD_U.bin, bios_CD_E.bin, bios_CD_J.bin." >> retrohub/pkgfiles/USRDIR/roms/README.TXT
           test "$(find retrohub/pkgfiles/USRDIR/cores -maxdepth 1 -name '*.SELF' | wc -l)" -ge 24
 
@@ -130,12 +131,12 @@ jobs:
           "$PS3DEV/portlibs/ppu/bin/sdl2-config" --version
           cd retrohub
           make -f Makefile.ps3 clean all
-          cp retrovicios_ps3.pkg "$GITHUB_WORKSPACE/Retrovicios_PS3_v1.9_SegaCD.pkg"
-          ls -lh "$GITHUB_WORKSPACE/Retrovicios_PS3_v1.9_SegaCD.pkg"
+          cp retrovicios_ps3.pkg "$GITHUB_WORKSPACE/Retrovicios_PS3_v2.0_XMB.pkg"
+          ls -lh "$GITHUB_WORKSPACE/Retrovicios_PS3_v2.0_XMB.pkg"
 
       - name: Upload final package
         uses: actions/upload-artifact@v4
         with:
-          name: Retrovicios_PS3_v1.9_SegaCD
-          path: Retrovicios_PS3_v1.9_SegaCD.pkg
+          name: Retrovicios_PS3_v2.0_XMB
+          path: Retrovicios_PS3_v2.0_XMB.pkg
           if-no-files-found: error
